@@ -5,7 +5,7 @@ let visualizationCanvas, playPauseBtn, stepForwardBtn, stepBackwardBtn, resetBtn
     speedSlider, currentStepElement, stepDescriptionElement, stepCounterElement,
     cameraResetBtn, toggleViewBtn, inputSizeSlider, sizeValueElement, randomDataBtn,
     nearlySortedBtn, reversedBtn, customInputField, applyCustomBtn, codeElement,
-    shapeSelector, themeSelector;
+    shapeSelector, themeSelector, focusDescriptionElement, focusModeToggle;
 
 // Global state
 const state = {
@@ -26,7 +26,10 @@ const state = {
         swap: 0xFBBC05, // Yellow
         sorted: 0x34A853, // Green
         selected: 0xAA46BC  // Purple
-    }
+    },
+    // Enhanced focus mode
+    focusMode: true,
+    focusedElements: []
 };
 
 // Custom shape geometries
@@ -84,6 +87,9 @@ const themes = {
 // Three.js variables
 let scene, camera, renderer, controls;
 let dataObjects = [];
+let stepLabels = [];
+let focusSpotlight = null;
+let arrowObjects = [];
 
 // Initialize the visualization
 function init() {
@@ -119,6 +125,8 @@ function init() {
         customInputField = document.getElementById('custom-input-data');
         applyCustomBtn = document.getElementById('apply-custom');
         codeElement = document.getElementById('algorithm-code');
+        focusDescriptionElement = document.getElementById('focused-step-description');
+        focusModeToggle = document.getElementById('focus-mode-toggle');
         
         // New elements for shape and theme selection
         shapeSelector = document.getElementById('shape-selector');
@@ -131,6 +139,15 @@ function init() {
     } catch (error) {
         console.error('Error getting DOM elements:', error);
         return;
+    }
+    
+    // Set up focus mode toggle
+    if (focusModeToggle) {
+        focusModeToggle.checked = state.focusMode;
+        focusModeToggle.addEventListener('change', function() {
+            state.focusMode = this.checked;
+            updateVisualization(true);
+        });
     }
     
     // Set up UI interactivity for new controls
@@ -225,7 +242,7 @@ function setupThemeSelector() {
     }
 }
 
-// Set up Three.js scene
+// Set up Three.js scene with enhanced lighting and setup
 function setupScene() {
     try {
         // Check if Three.js is loaded
@@ -246,20 +263,20 @@ function setupScene() {
         scene.background = new THREE.Color(0x0a1929); // Dark blue background
         
         // Improved grid with subtle fade
-        const gridHelper = new THREE.GridHelper(50, 50, 0x304FFE, 0x1A237E);
+        const gridHelper = new THREE.GridHelper(100, 50, 0x304FFE, 0x1A237E);
         gridHelper.material.opacity = 0.15;
         gridHelper.material.transparent = true;
         scene.add(gridHelper);
         
-        // Create camera
+        // Create camera with better positioning
         const aspect = visualizationCanvas.clientWidth / visualizationCanvas.clientHeight || 2;
-        camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-        camera.position.set(0, 15, 30);
+        camera = new THREE.PerspectiveCamera(65, aspect, 0.1, 1000);
+        camera.position.set(0, 40, 60); // Positioned better for viewing
         
-        // Create renderer with better antialiasing
+        // Create renderer with enhanced quality
         renderer = new THREE.WebGLRenderer({ 
             antialias: true,
-            alpha: true 
+            alpha: true
         });
         renderer.setSize(visualizationCanvas.clientWidth, visualizationCanvas.clientHeight);
         renderer.shadowMap.enabled = true;
@@ -268,24 +285,44 @@ function setupScene() {
         visualizationCanvas.appendChild(renderer.domElement);
         
         // Add enhanced lighting for better 3D effect
-        // Ambient light
-        const ambientLight = new THREE.AmbientLight(0x404080, 0.5);
+        // Ambient light for overall illumination
+        const ambientLight = new THREE.AmbientLight(0x404080, 0.6);
         scene.add(ambientLight);
         
-        // Directional light with shadows
-        const mainLight = new THREE.DirectionalLight(0xffffff, 1);
-        mainLight.position.set(5, 20, 15);
+        // Main directional light with shadows
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        mainLight.position.set(10, 30, 20);
         mainLight.castShadow = true;
-        mainLight.shadow.mapSize.width = 1024;
-        mainLight.shadow.mapSize.height = 1024;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
         mainLight.shadow.camera.near = 0.5;
-        mainLight.shadow.camera.far = 50;
+        mainLight.shadow.camera.far = 150;
+        mainLight.shadow.camera.left = -70;
+        mainLight.shadow.camera.right = 70;
+        mainLight.shadow.camera.top = 70;
+        mainLight.shadow.camera.bottom = -70;
         scene.add(mainLight);
         
+        // Fill light from opposite side
+        const fillLight = new THREE.DirectionalLight(0x9090ff, 0.6);
+        fillLight.position.set(-10, 20, -15);
+        scene.add(fillLight);
+        
         // Add a subtle point light for highlights
-        const pointLight = new THREE.PointLight(0x3f51b5, 0.8, 50);
+        const pointLight = new THREE.PointLight(0x3f51b5, 0.8, 100);
         pointLight.position.set(-10, 20, 5);
         scene.add(pointLight);
+        
+        // Add spotlight for focused element
+        focusSpotlight = new THREE.SpotLight(0xffffff, 1.2);
+        focusSpotlight.position.set(0, 60, 0);
+        focusSpotlight.angle = Math.PI / 6;
+        focusSpotlight.penumbra = 0.3;
+        focusSpotlight.decay = 1;
+        focusSpotlight.distance = 200;
+        focusSpotlight.castShadow = true;
+        focusSpotlight.visible = false;
+        scene.add(focusSpotlight);
         
         // Add orbit controls with smoother damping
         if (typeof THREE.OrbitControls === 'undefined') {
@@ -332,7 +369,83 @@ function animate() {
     if (controls && typeof controls.update === 'function') {
         controls.update();
     }
+    
+    // Animate any elements that need continuous updates
+    animateFocusElements();
+    
     renderer.render(scene, camera);
+}
+
+// Create a more visible step indicator
+function createStepIndicator(step, totalSteps) {
+    // Remove any existing step indicator
+    const existingIndicator = document.getElementById('enhanced-step-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+    
+    // Create a new step indicator
+    const indicator = document.createElement('div');
+    indicator.id = 'enhanced-step-indicator';
+    indicator.style.cssText = `
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background-color: rgba(30, 30, 50, 0.9);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 30px;
+        font-size: 1.2rem;
+        font-weight: 600;
+        z-index: 1000;
+        border: 2px solid rgba(100, 149, 237, 0.5);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    `;
+    indicator.textContent = `Step ${step + 1} of ${totalSteps}`;
+    
+    visualizationCanvas.appendChild(indicator);
+}
+
+// Animate focused elements (pulsing, rotation, etc.)
+function animateFocusElements() {
+    // If we have focused elements, apply a subtle pulsing effect
+    if (state.focusMode && state.focusedElements.length > 0 && dataObjects.length > 0) {
+        const time = Date.now() * 0.001;
+        state.focusedElements.forEach(index => {
+            if (index >= 0 && index < dataObjects.length) {
+                const element = dataObjects[index];
+                if (element && element.scale) {
+                    // Apply a pulsing scale effect
+                    const pulseFactor = 1 + Math.sin(time * 3) * 0.1;
+                    element.scale.set(pulseFactor, pulseFactor, pulseFactor);
+                    
+                    // Update spotlight position to follow the focused element
+                    if (focusSpotlight && state.focusedElements.length === 1) {
+                        focusSpotlight.position.x = element.position.x;
+                        focusSpotlight.position.z = element.position.z + 10;
+                        focusSpotlight.target = element;
+                    }
+                }
+            }
+        });
+    }
+    
+    // Animate arrows if they exist
+    animateArrows();
+}
+
+// Animate arrows
+function animateArrows() {
+    if (arrowObjects.length > 0) {
+        const time = Date.now() * 0.001;
+        arrowObjects.forEach(arrow => {
+            if (arrow && arrow.scale) {
+                // Pulse the arrow
+                const pulseFactor = 1 + Math.sin(time * 3) * 0.1;
+                arrow.scale.y = pulseFactor;
+            }
+        });
+    }
 }
 
 // Set up event listeners
@@ -399,6 +512,14 @@ function handleKeyboardShortcuts(event) {
             toggle2D3DView();
             event.preventDefault();
             break;
+        case 'f': // F - toggle focus mode
+            if (focusModeToggle) {
+                focusModeToggle.checked = !focusModeToggle.checked;
+                state.focusMode = focusModeToggle.checked;
+                updateVisualization(true);
+            }
+            event.preventDefault();
+            break;
     }
 }
 
@@ -437,7 +558,7 @@ function startPlayback() {
         } else {
             togglePlayPause(); // Stop when we reach the end
         }
-    }, 1200 / state.playbackSpeed); // Slightly slower base speed for better viewing
+    }, 2000 / state.playbackSpeed); // Slower base speed for better viewing and comprehension
 }
 
 // Stop playback
@@ -517,7 +638,7 @@ function resetCamera() {
     if (!camera || !controls) return;
     
     const startPos = camera.position.clone();
-    const endPos = new THREE.Vector3(0, 15, 30);
+    const endPos = new THREE.Vector3(0, 40, 60); // Positioned better for viewing
     const duration = 800; // milliseconds
     const startTime = Date.now();
     
@@ -559,7 +680,7 @@ function toggle2D3DView() {
     if (state.is3DView) {
         // Smooth transition to 3D view
         const startPos = camera.position.clone();
-        const endPos = new THREE.Vector3(0, 15, 30);
+        const endPos = new THREE.Vector3(0, 40, 60);
         const duration = 1000; // milliseconds
         const startTime = Date.now();
         
@@ -588,7 +709,7 @@ function toggle2D3DView() {
     } else {
         // Smooth transition to 2D view
         const startPos = camera.position.clone();
-        const endPos = new THREE.Vector3(0, 30, 0.0001);
+        const endPos = new THREE.Vector3(0, 80, 0.0001);
         const duration = 1000; // milliseconds
         const startTime = Date.now();
         
@@ -623,13 +744,26 @@ function updateSizeValue() {
     
     const size = inputSizeSlider.value;
     sizeValueElement.textContent = size;
+    
+    // Limit the maximum size to improve focus on individual elements
+    if (state.focusMode && size > 20) {
+        inputSizeSlider.value = 20;
+        sizeValueElement.textContent = 20;
+    }
 }
 
 // Generate random data with animation
 function generateRandomData() {
     if (!inputSizeSlider) return;
     
-    const size = parseInt(inputSizeSlider.value);
+    // Limit the data size for better focus on individual elements
+    let size = parseInt(inputSizeSlider.value);
+    if (state.focusMode && size > 20) {
+        size = 20;
+        inputSizeSlider.value = size;
+        sizeValueElement.textContent = size;
+    }
+    
     state.inputData = Array.from({ length: size }, () => Math.floor(Math.random() * 100));
     
     // Add visual feedback for data generation
@@ -643,7 +777,14 @@ function generateRandomData() {
 function generateNearlySortedData() {
     if (!inputSizeSlider) return;
     
-    const size = parseInt(inputSizeSlider.value);
+    // Limit the data size for better focus on individual elements
+    let size = parseInt(inputSizeSlider.value);
+    if (state.focusMode && size > 20) {
+        size = 20;
+        inputSizeSlider.value = size;
+        sizeValueElement.textContent = size;
+    }
+    
     state.inputData = Array.from({ length: size }, (_, i) => i + 1);
     
     // Swap a few elements to make it nearly sorted
@@ -664,7 +805,14 @@ function generateNearlySortedData() {
 function generateReversedData() {
     if (!inputSizeSlider) return;
     
-    const size = parseInt(inputSizeSlider.value);
+    // Limit the data size for better focus on individual elements
+    let size = parseInt(inputSizeSlider.value);
+    if (state.focusMode && size > 20) {
+        size = 20;
+        inputSizeSlider.value = size;
+        sizeValueElement.textContent = size;
+    }
+    
     state.inputData = Array.from({ length: size }, (_, i) => size - i);
     
     // Add visual feedback for data generation
@@ -702,6 +850,12 @@ function applyCustomData() {
         
         if (data.length === 0) {
             throw new Error('Empty input');
+        }
+        
+        // Limit the data size for better focus
+        if (state.focusMode && data.length > 20) {
+            data.length = 20;
+            customInputField.value = data.join(', ');
         }
         
         state.inputData = data;
@@ -835,10 +989,10 @@ function addLoadingAnimation() {
             z-index: 1000;
         }
         .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-left-color: white;
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(100, 149, 237, 0.2);
+            border-left-color: rgba(100, 149, 237, 0.8);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -874,48 +1028,9 @@ function showNotification(message, type = 'info') {
     // Add to DOM
     document.body.appendChild(notification);
     
-    // Add styles inline
-    const style = document.createElement('style');
-    style.id = 'notification-style';
-    style.textContent = `
-        .notification {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 4px;
-            color: white;
-            z-index: 9999;
-            animation: fadeInOut 5s forwards;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-        .notification.info {
-            background-color: #2196F3;
-        }
-        .notification.error {
-            background-color: #F44336;
-        }
-        .notification.success {
-            background-color: #4CAF50;
-        }
-        @keyframes fadeInOut {
-            0% { opacity: 0; transform: translateY(20px); }
-            10% { opacity: 1; transform: translateY(0); }
-            90% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-20px); }
-        }
-    `;
-    
-    document.head.appendChild(style);
-    
     // Remove after animation
     setTimeout(() => {
         notification.remove();
-        
-        const notificationStyle = document.getElementById('notification-style');
-        if (notificationStyle) {
-            notificationStyle.remove();
-        }
     }, 5000);
 }
 
@@ -961,6 +1076,9 @@ function updateVisualization(animated = false) {
         }
     }
     
+    // Create enhanced step indicator
+    createStepIndicator(state.currentStepIndex, state.steps.length);
+    
     if (stepDescriptionElement) {
         // Format step description with highlighted elements
         let description = currentStep.description || 'No description';
@@ -988,17 +1106,174 @@ function updateVisualization(animated = false) {
         }
     }
     
+    // Update focused element description
+    updateFocusedDescription(currentStep);
+    
     // Clear previous visualization
     clearVisualization();
     
+    // Determine focused elements for this step
+    determineFocusedElements(currentStep);
+    
     // Create new visualization based on the step
     createVisualizationFromData(currentStep.state, currentStep, animated);
+}
+
+// Update focused description
+function updateFocusedDescription(step) {
+    if (!focusDescriptionElement) return;
+    
+    let focusedHTML = '';
+    
+    switch (step.type) {
+        case 'initial':
+            focusedHTML = `<div class="focus-title">Initial Array</div>
+                          <div class="focus-detail">We'll start with an array of ${step.state.length} elements.</div>
+                          <div class="focus-explanation">${step.educational_note || `In ${state.algorithmName}, we'll compare and rearrange these elements to sort them.`}</div>`;
+            break;
+        case 'comparison':
+            if (step.comparing && step.comparing.length >= 2) {
+                const i1 = step.comparing[0];
+                const i2 = step.comparing[1];
+                const v1 = step.state[i1];
+                const v2 = step.state[i2];
+                focusedHTML = `<div class="focus-title">Comparing Elements</div>
+                              <div class="focus-detail">Comparing <span class="highlight-value">${v1}</span> with <span class="highlight-value">${v2}</span></div>
+                              <div class="focus-explanation">${step.educational_note || 'The algorithm decides whether to swap based on the comparison result.'}</div>`;
+            }
+            break;
+        case 'swap':
+            if (step.swapped && step.swapped.length >= 2) {
+                const i1 = step.swapped[0];
+                const i2 = step.swapped[1];
+                const v1 = step.state[i1];
+                const v2 = step.state[i2];
+                focusedHTML = `<div class="focus-title">Swapping Elements</div>
+                              <div class="focus-detail">Swapped <span class="highlight-value">${v2}</span> with <span class="highlight-value">${v1}</span></div>
+                              <div class="focus-explanation">${step.educational_note || 'Elements are rearranged to move toward the sorted order.'}</div>`;
+            }
+            break;
+        case 'min_selected':
+            if (step.min_idx !== undefined) {
+                const val = step.state[step.min_idx];
+                focusedHTML = `<div class="focus-title">Current Minimum</div>
+                              <div class="focus-detail">Selected <span class="highlight-value">${val}</span> as current minimum</div>
+                              <div class="focus-explanation">${step.educational_note || 'We\'ll check if any remaining elements are smaller.'}</div>`;
+            }
+            break;
+        case 'new_min':
+            if (step.min_idx !== undefined) {
+                const val = step.state[step.min_idx];
+                focusedHTML = `<div class="focus-title">New Minimum Found</div>
+                              <div class="focus-detail">Found new minimum: <span class="highlight-value">${val}</span></div>
+                              <div class="focus-explanation">${step.educational_note || 'This element will be swapped to its correct position.'}</div>`;
+            }
+            break;
+        case 'sorted':
+            focusedHTML = `<div class="focus-title">Partial Sorting Complete</div>
+                          <div class="focus-detail">Elements in green are in their final sorted positions.</div>
+                          <div class="focus-explanation">${step.educational_note || 'We continue sorting the remaining unsorted elements.'}</div>`;
+            break;
+        case 'final':
+            focusedHTML = `<div class="focus-title">Sorting Complete!</div>
+                          <div class="focus-detail">All elements are now in the correct order.</div>
+                          <div class="focus-explanation">${step.educational_note || `The ${state.algorithmName} algorithm has successfully sorted the array.`}</div>`;
+            break;
+        case 'pivot':
+            if (step.pivot_index !== undefined) {
+                const pivot = step.state[step.pivot_index];
+                focusedHTML = `<div class="focus-title">Pivot Selection</div>
+                              <div class="focus-detail">Selected <span class="highlight-value">${pivot}</span> as pivot</div>
+                              <div class="focus-explanation">${step.educational_note || 'Elements smaller than the pivot will go to the left, larger to the right.'}</div>`;
+            }
+            break;
+        case 'partition':
+            focusedHTML = `<div class="focus-title">Partition Complete</div>
+                          <div class="focus-detail">The array is now partitioned around the pivot.</div>
+                          <div class="focus-explanation">${step.educational_note || 'The algorithm will now recursively sort each partition.'}</div>`;
+            break;
+        default:
+            focusedHTML = `<div class="focus-title">${state.algorithmName}</div>
+                          <div class="focus-detail">${step.description || ''}</div>
+                          <div class="focus-explanation">${step.educational_note || 'Watch how the algorithm processes the data step by step.'}</div>`;
+    }
+    
+    focusDescriptionElement.innerHTML = focusedHTML;
+    
+    // Add animation to the focus description
+    focusDescriptionElement.classList.add('focus-transition');
+    setTimeout(() => {
+        focusDescriptionElement.classList.remove('focus-transition');
+    }, 500);
+}
+
+// Determine focused elements for current step
+function determineFocusedElements(step) {
+    state.focusedElements = [];
+    
+    if (!state.focusMode) return;
+    
+    // Use current_focus from step if available
+    if (step.current_focus && Array.isArray(step.current_focus)) {
+        state.focusedElements = [...step.current_focus];
+        return;
+    }
+    
+    // Otherwise, add elements to focus based on step type
+    switch (step.type) {
+        case 'comparison':
+            if (step.comparing) {
+                state.focusedElements = [...step.comparing];
+            }
+            break;
+        case 'swap':
+        case 'before_swap':
+        case 'after_swap':
+            if (step.swapped) {
+                state.focusedElements = [...step.swapped];
+            } else if (step.swapping) {
+                state.focusedElements = [...step.swapping];
+            }
+            break;
+        case 'min_selected':
+        case 'new_min':
+            if (step.min_idx !== undefined) {
+                state.focusedElements = [step.min_idx];
+            }
+            break;
+        case 'pivot':
+            if (step.pivot_index !== undefined) {
+                state.focusedElements = [step.pivot_index];
+            }
+            break;
+        case 'checking':
+            if (step.checking_index !== undefined) {
+                state.focusedElements = [step.checking_index];
+            }
+            break;
+        case 'found':
+            if (step.found_index !== undefined) {
+                state.focusedElements = [step.found_index];
+            }
+            break;
+        case 'insert':
+            if (step.inserted_index !== undefined) {
+                state.focusedElements = [step.inserted_index];
+            }
+            break;
+    }
+    
+    // Show spotlight if we have exactly one or two focused elements
+    if (focusSpotlight) {
+        focusSpotlight.visible = (state.focusedElements.length > 0 && state.focusedElements.length <= 2);
+    }
 }
 
 // Clear the visualization scene
 function clearVisualization() {
     if (!scene) return;
     
+    // Remove meshes and geometries
     for (const obj of dataObjects) {
         if (obj.geometry) obj.geometry.dispose();
         if (obj.material) {
@@ -1010,8 +1285,19 @@ function clearVisualization() {
         }
         scene.remove(obj);
     }
-    
     dataObjects = [];
+    
+    // Remove step labels
+    for (const label of stepLabels) {
+        scene.remove(label);
+    }
+    stepLabels = [];
+    
+    // Clear arrow objects
+    for (const arrow of arrowObjects) {
+        scene.remove(arrow);
+    }
+    arrowObjects = [];
 }
 
 // Create visualization from data with current step info
@@ -1021,8 +1307,9 @@ function createVisualizationFromData(data, step, animated = false) {
         return;
     }
     
-    const baseSize = 1;
-    const spacing = 0.2;
+    // For focus mode, we'll make the elements much larger
+    const baseSize = state.focusMode ? 6 : 2;
+    const spacing = state.focusMode ? 10 : 2;
     const totalWidth = data.length * (baseSize + spacing) - spacing;
     const startX = -totalWidth / 2 + baseSize / 2;
     
@@ -1033,14 +1320,25 @@ function createVisualizationFromData(data, step, animated = false) {
         const value = data[i];
         
         // Scale height based on max value, with a minimum size
-        const heightScale = Math.max(0.1, value / maxValue);
+        const heightScale = Math.max(0.2, value / maxValue);
         const height = baseSize * 5 * heightScale; // Scale up for better visibility
         
-        // Determine element coloring based on step type and state
+        // Determine element coloring based on operation type and state
         let color = getElementColor(i, step, data.length);
-        let opacity = 0.9;
+        let opacity = 0.95; // Higher base opacity
         let metalness = 0.5;
         let roughness = 0.2;
+        
+        // If using focus mode, reduce opacity for non-focused elements
+        if (state.focusMode && !state.focusedElements.includes(i)) {
+            if (step.sorted_indices && step.sorted_indices.includes(i)) {
+                // Keep sorted elements visible but slightly dimmed
+                opacity = 0.8;
+            } else {
+                // Significantly dim other elements
+                opacity = 0.2; // Make non-focused elements very transparent
+            }
+        }
         
         // Create shape geometry based on selected shape
         let geometry;
@@ -1080,11 +1378,17 @@ function createVisualizationFromData(data, step, animated = false) {
             roughness: roughness,
             reflectivity: 0.5,
             clearcoat: 0.3,
-            clearcoatRoughness: 0.2
+            clearcoatRoughness: 0.2,
+            emissive: color,
+            emissiveIntensity: 0.05 // Subtle glow
         });
         
         // Create the mesh
         const element = new THREE.Mesh(geometry, material);
+        
+        // Enable shadows
+        element.castShadow = true;
+        element.receiveShadow = true;
         
         // Calculate position
         const xPos = startX + i * (baseSize + spacing);
@@ -1094,13 +1398,13 @@ function createVisualizationFromData(data, step, animated = false) {
         if (animated) {
             // Start position (below the grid)
             element.position.x = xPos;
-            element.position.y = -2;
+            element.position.y = -10; // Start lower for more dramatic entrance
             element.position.z = 0;
             element.scale.y = 0.1; // Start small
             
             // Create animation sequence with staggered timing
-            const delay = i * 30; // Stagger the animations
-            const duration = 700; // Total animation time
+            const delay = i * 80; // Longer stagger for a more dramatic effect
+            const duration = 1000; // Total animation time
             const startTime = Date.now() + delay;
             
             function animateElement() {
@@ -1113,7 +1417,7 @@ function createVisualizationFromData(data, step, animated = false) {
                 const progress = Math.min(elapsedTime / duration, 1);
                 const easeProgress = 0.5 - 0.5 * Math.cos(progress * Math.PI); // Smooth ease in-out
                 
-                element.position.y = -2 + (yPos + 2) * easeProgress;
+                element.position.y = -10 + (yPos + 10) * easeProgress;
                 element.scale.y = 0.1 + (1 - 0.1) * easeProgress;
                 
                 if (progress < 1) {
@@ -1136,71 +1440,106 @@ function createVisualizationFromData(data, step, animated = false) {
         scene.add(element);
         dataObjects.push(element);
         
-        // Add value label for smaller arrays
-        if (data.length <= 30) {
-            try {
-                const textCanvas = document.createElement('canvas');
-                const ctx = textCanvas.getContext('2d');
-                textCanvas.width = 64;
-                textCanvas.height = 64;
-                ctx.fillStyle = 'white';
-                ctx.font = '48px Inter, Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(value, 32, 48);
-                
-                const textTexture = new THREE.CanvasTexture(textCanvas);
-                const textMaterial = new THREE.SpriteMaterial({ 
-                    map: textTexture,
-                    transparent: true,
-                    opacity: animated ? 0 : 1 // Start invisible if animated
-                });
-                const textSprite = new THREE.Sprite(textMaterial);
-                const scaleFactor = 0.5;
-                textSprite.scale.set(scaleFactor, scaleFactor, scaleFactor);
-                
-                // Position above the element, higher for non-cube shapes
-                const textY = state.visualizationShape === 'cube' 
-                    ? height + 1
-                    : heightScale * 5 + 1;
-                
-                textSprite.position.set(xPos, textY, 0);
-                
-                // Animate text fade-in if needed
-                if (animated) {
-                    const textDelay = i * 30 + 300; // Slightly delayed after elements
-                    const textDuration = 500;
-                    const textStartTime = Date.now() + textDelay;
-                    
-                    function animateText() {
-                        const textElapsedTime = Date.now() - textStartTime;
-                        if (textElapsedTime < 0) {
-                            requestAnimationFrame(animateText);
-                            return;
-                        }
-                        
-                        const textProgress = Math.min(textElapsedTime / textDuration, 1);
-                        textMaterial.opacity = textProgress;
-                        
-                        if (textProgress < 1) {
-                            requestAnimationFrame(animateText);
-                        } else {
-                            textMaterial.opacity = 1;
-                        }
-                    }
-                    
-                    animateText();
-                }
-                
-                scene.add(textSprite);
-                dataObjects.push(textSprite);
-            } catch (error) {
-                console.warn('Error creating text label:', error);
-            }
-        }
+        // Add value label
+        addValueLabel(value, element, i, height, animated);
     }
     
     // Add visual indicators for operations (arrows, highlights, etc.)
     addOperationIndicators(data, step);
+}
+
+// Add value label above each shape
+function addValueLabel(value, element, index, height, animated) {
+    try {
+        const textCanvas = document.createElement('canvas');
+        const ctx = textCanvas.getContext('2d');
+        textCanvas.width = 256;
+        textCanvas.height = 256;
+        
+        // Set font size based on focus mode
+        const fontSize = state.focusMode ? 160 : 84;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, 256, 256);
+        
+        // Add value text with improved visibility
+        ctx.fillStyle = 'white';
+        ctx.font = `bold ${fontSize}px Inter, Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(value, 128, 128);
+        
+        // Add drop shadow for better visibility
+        if (state.focusMode) {
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 5;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+        }
+        
+        const textTexture = new THREE.CanvasTexture(textCanvas);
+        const textMaterial = new THREE.SpriteMaterial({ 
+            map: textTexture,
+            transparent: true,
+            opacity: animated ? 0 : 1 // Start invisible if animated
+        });
+        
+        const textSprite = new THREE.Sprite(textMaterial);
+        // Scale the text larger in focus mode
+        const scaleFactor = state.focusMode ? 3 : 1.5;
+        textSprite.scale.set(scaleFactor, scaleFactor, scaleFactor);
+        
+        // Position above the element, higher for non-cube shapes
+        const textY = element.position.y + 
+            (state.visualizationShape === 'cube' ? height + 4 : height * 0.5 + 7);
+        
+        textSprite.position.set(element.position.x, textY, 0);
+        
+        // Determine visibility based on focus mode
+        if (state.focusMode && !state.focusedElements.includes(index)) {
+            if (step && step.sorted_indices && step.sorted_indices.includes(index)) {
+                // Keep sorted elements more visible
+                textMaterial.opacity = animated ? 0 : 0.8;
+            } else {
+                // Dim non-focused elements
+                textMaterial.opacity = animated ? 0 : 0.3;
+            }
+        }
+        
+        // Animate text fade-in if needed
+        if (animated) {
+            const textDelay = index * 80 + 500; // Slightly delayed after elements
+            const textDuration = 500;
+            const textStartTime = Date.now() + textDelay;
+            
+            function animateText() {
+                const textElapsedTime = Date.now() - textStartTime;
+                if (textElapsedTime < 0) {
+                    requestAnimationFrame(animateText);
+                    return;
+                }
+                
+                const textProgress = Math.min(textElapsedTime / textDuration, 1);
+                const targetOpacity = state.focusMode && !state.focusedElements.includes(index) ? 
+                    (step && step.sorted_indices && step.sorted_indices.includes(index) ? 0.8 : 0.3) : 1;
+                
+                textMaterial.opacity = textProgress * targetOpacity;
+                
+                if (textProgress < 1) {
+                    requestAnimationFrame(animateText);
+                } else {
+                    textMaterial.opacity = targetOpacity;
+                }
+            }
+            
+            animateText();
+        }
+        
+        scene.add(textSprite);
+        stepLabels.push(textSprite);
+    } catch (error) {
+        console.warn('Error creating text label:', error);
+    }
 }
 
 // Helper function to get element color based on operation type and theme
@@ -1222,6 +1561,12 @@ function getElementColor(index, step, totalElements) {
         return state.highlightColors.sorted;
     } else if ((step.type === 'min_selected' || step.type === 'new_min') && step.min_idx === index) {
         return state.highlightColors.selected;
+    } else if (step.type === 'pivot' && step.pivot_index === index) {
+        return 0xFF9800; // Orange for pivot
+    } else if (step.found_index === index) {
+        return 0x00E676; // Bright green for found element
+    } else if (step.checking_index === index) {
+        return 0xFFD54F; // Amber for element being checked
     }
     
     return defaultColor;
@@ -1256,13 +1601,113 @@ function addOperationIndicators(data, step) {
         // Add pivot indicator for quicksort
         addPivotIndicator(step.pivot_index, data);
     }
+    
+    // Add a step floating description for clarity
+    addStepFloatingDescription(step, data);
 }
 
-// Add comparison arrow
+// Add a floating step description for clarity
+function addStepFloatingDescription(step, data) {
+    // Skip if we're not in focus mode
+    if (!state.focusMode) return;
+    
+    let descriptionText = '';
+    
+    // Generate a concise description based on step type
+    switch (step.type) {
+        case 'initial':
+            descriptionText = 'Starting with unsorted array';
+            break;
+        case 'comparison':
+            if (step.comparing && step.comparing.length >= 2) {
+                const i1 = step.comparing[0];
+                const i2 = step.comparing[1];
+                descriptionText = `Comparing ${data[i1]} with ${data[i2]}`;
+            }
+            break;
+        case 'swap':
+            if (step.swapped && step.swapped.length >= 2) {
+                const i1 = step.swapped[0];
+                const i2 = step.swapped[1];
+                descriptionText = `Swapped ${data[i1]} and ${data[i2]}`;
+            }
+            break;
+        case 'sorted':
+            descriptionText = 'Elements in green are sorted';
+            break;
+        case 'pivot':
+            if (step.pivot_index !== undefined) {
+                descriptionText = `Pivot: ${data[step.pivot_index]}`;
+            }
+            break;
+        case 'final':
+            descriptionText = 'Array is sorted';
+            break;
+        default:
+            // Use the original description if available
+            descriptionText = step.description || '';
+    }
+    
+    if (!descriptionText) return;
+    
+    // Create a floating text label with better visibility
+    const textCanvas = document.createElement('canvas');
+    const ctx = textCanvas.getContext('2d');
+    textCanvas.width = 1024;
+    textCanvas.height = 256;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, 1024, 256);
+    
+    // Draw a background for the text
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.roundRect(20, 20, 984, 216, 20);
+    ctx.fill();
+    
+    // Add a colored border based on step type
+    let borderColor = '#3f51b5'; // Default blue
+    
+    if (step.type === 'comparison') borderColor = '#EA4335'; // Red
+    else if (step.type === 'swap') borderColor = '#FBBC05'; // Yellow
+    else if (step.type === 'sorted' || step.type === 'final') borderColor = '#34A853'; // Green
+    
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 8;
+    ctx.roundRect(20, 20, 984, 216, 20);
+    ctx.stroke();
+    
+    // Draw the text with better styling
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 56px Inter, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Add shadow for better visibility
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 3;
+    ctx.shadowOffsetY = 3;
+    
+    ctx.fillText(descriptionText, 512, 128);
+    
+    const textTexture = new THREE.CanvasTexture(textCanvas);
+    const textMaterial = new THREE.SpriteMaterial({ map: textTexture });
+    const textSprite = new THREE.Sprite(textMaterial);
+    textSprite.scale.set(30, 7.5, 1);
+    
+    // Position at the top of the visualization
+    textSprite.position.set(0, data.length > 10 ? 40 : 30, 10);
+    
+    // Add to scene and track for cleanup
+    scene.add(textSprite);
+    stepLabels.push(textSprite);
+}
+
+// Add comparison arrow with enhanced styling
 function addComparisonArrow(index1, index2, data) {
     // Calculate positions
-    const baseSize = 1;
-    const spacing = 0.2;
+    const baseSize = state.focusMode ? 6 : 2; // Larger elements in focus mode
+    const spacing = state.focusMode ? 10 : 2;
     const totalWidth = data.length * (baseSize + spacing) - spacing;
     const startX = -totalWidth / 2 + baseSize / 2;
     
@@ -1276,8 +1721,8 @@ function addComparisonArrow(index1, index2, data) {
     
     // Create curved arc for better visibility
     const points = [];
-    const segments = 20;
-    const height = 3; // Arc height
+    const segments = 30; // More segments for smoother curve
+    const height = state.focusMode ? 15 : 4; // Taller arc in focus mode
     
     for (let i = 0; i <= segments; i++) {
         const t = i / segments;
@@ -1287,49 +1732,103 @@ function addComparisonArrow(index1, index2, data) {
     }
     
     const curve = new THREE.CatmullRomCurve3(points);
-    const geometry = new THREE.TubeGeometry(curve, 20, 0.1, 8, false);
-    const material = new THREE.MeshBasicMaterial({ color: 0xEA4335 }); // Red
+    const geometry = new THREE.TubeGeometry(curve, 30, state.focusMode ? 0.6 : 0.2, 12, false);
+    
+    // Use glowing material for better visibility
+    const material = new THREE.MeshStandardMaterial({ 
+        color: 0xEA4335,
+        emissive: 0xEA4335,
+        emissiveIntensity: 0.5,
+    });
     
     const tube = new THREE.Mesh(geometry, material);
-    scene.add(tube);
-    dataObjects.push(tube);
+    
+    // Create arrow group for animations
+    const arrowGroup = new THREE.Group();
+    arrowGroup.add(tube);
+    scene.add(arrowGroup);
+    arrowObjects.push(arrowGroup);
     
     // Add arrow tips
-    const tipSize = 0.3;
-    const tipGeometry = new THREE.ConeGeometry(tipSize, tipSize * 2, 8);
-    const tipMaterial = new THREE.MeshBasicMaterial({ color: 0xEA4335 });
+    const tipSize = state.focusMode ? 1.2 : 0.4;
+    const tipGeometry = new THREE.ConeGeometry(tipSize, tipSize * 2, 16);
+    const tipMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xEA4335,
+        emissive: 0xEA4335,
+        emissiveIntensity: 0.5
+    });
     
     // Tip at end
     const endTip = new THREE.Mesh(tipGeometry, tipMaterial);
     endTip.position.set(x2, height * Math.sin(Math.PI * 1), 0);
     endTip.rotation.z = arrowDir > 0 ? -Math.PI / 2 : Math.PI / 2;
-    scene.add(endTip);
-    dataObjects.push(endTip);
+    arrowGroup.add(endTip);
     
-    // Add comparison text
+    // Add comparison text above the arrow
     const textCanvas = document.createElement('canvas');
     const ctx = textCanvas.getContext('2d');
-    textCanvas.width = 128;
-    textCanvas.height = 64;
+    textCanvas.width = 512;
+    textCanvas.height = 128;
+    
+    // Create a background for better text visibility
+    ctx.fillStyle = 'rgba(234, 67, 53, 0.9)'; // Red background
+    ctx.roundRect(0, 0, 512, 128, 20);
+    ctx.fill();
+    
+    // Add text
     ctx.fillStyle = 'white';
-    ctx.font = '24px Inter, Arial';
+    ctx.font = 'bold 64px Inter, Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Compare', 64, 32);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('COMPARE', 256, 64);
     
     const textTexture = new THREE.CanvasTexture(textCanvas);
     const textMaterial = new THREE.SpriteMaterial({ map: textTexture });
     const textSprite = new THREE.Sprite(textMaterial);
-    textSprite.scale.set(3, 1.5, 1.5);
-    textSprite.position.set(arrowCenter, height + 1, 0);
+    const textScale = state.focusMode ? 8 : 4;
+    textSprite.scale.set(textScale, textScale / 4, 1);
+    textSprite.position.set(arrowCenter, height + (state.focusMode ? 6 : 2), 0);
     scene.add(textSprite);
-    dataObjects.push(textSprite);
+    stepLabels.push(textSprite);
+    
+    // Add specific comparison text
+    const compTextCanvas = document.createElement('canvas');
+    const compCtx = compTextCanvas.getContext('2d');
+    compTextCanvas.width = 512;
+    compTextCanvas.height = 128;
+    
+    // Create background
+    compCtx.fillStyle = 'rgba(30, 30, 50, 0.95)';
+    compCtx.roundRect(0, 0, 512, 128, 16);
+    compCtx.fill();
+    
+    // Add border
+    compCtx.strokeStyle = 'rgba(234, 67, 53, 0.8)';
+    compCtx.lineWidth = 4;
+    compCtx.roundRect(0, 0, 512, 128, 16);
+    compCtx.stroke();
+    
+    // Add text
+    compCtx.fillStyle = 'white';
+    compCtx.font = 'bold 48px Inter, Arial, sans-serif';
+    compCtx.textAlign = 'center';
+    compCtx.textBaseline = 'middle';
+    compCtx.fillText(`${data[index1]} ${data[index1] > data[index2] ? '>' : '<'} ${data[index2]}`, 256, 64);
+    
+    const compTextTexture = new THREE.CanvasTexture(compTextCanvas);
+    const compTextMaterial = new THREE.SpriteMaterial({ map: compTextTexture });
+    const compTextSprite = new THREE.Sprite(compTextMaterial);
+    compTextSprite.scale.set(textScale, textScale / 4, 1);
+    compTextSprite.position.set(arrowCenter, height + (state.focusMode ? 12 : 5), 0);
+    scene.add(compTextSprite);
+    stepLabels.push(compTextSprite);
 }
 
-// Add swap arrows
+// Add swap arrows with enhanced styling
 function addSwapArrows(index1, index2, data) {
     // Calculate positions
-    const baseSize = 1;
-    const spacing = 0.2;
+    const baseSize = state.focusMode ? 6 : 2;
+    const spacing = state.focusMode ? 10 : 2;
     const totalWidth = data.length * (baseSize + spacing) - spacing;
     const startX = -totalWidth / 2 + baseSize / 2;
     
@@ -1337,12 +1836,12 @@ function addSwapArrows(index1, index2, data) {
     const x2 = startX + index2 * (baseSize + spacing);
     
     // Create two curved arrows in opposite directions
-    const height1 = 2; // Arc height for first arrow
-    const height2 = 3.5; // Arc height for second arrow
+    const height1 = state.focusMode ? 12 : 3; // Arc height for first arrow
+    const height2 = state.focusMode ? 20 : 5; // Arc height for second arrow
     
     // First arrow (index1 to index2)
     const points1 = [];
-    const segments = 20;
+    const segments = 30;
     
     for (let i = 0; i <= segments; i++) {
         const t = i / segments;
@@ -1352,12 +1851,20 @@ function addSwapArrows(index1, index2, data) {
     }
     
     const curve1 = new THREE.CatmullRomCurve3(points1);
-    const geometry1 = new THREE.TubeGeometry(curve1, 20, 0.1, 8, false);
-    const material1 = new THREE.MeshBasicMaterial({ color: 0xFBBC05 }); // Yellow
+    const geometry1 = new THREE.TubeGeometry(curve1, 30, state.focusMode ? 0.6 : 0.2, 12, false);
+    const material1 = new THREE.MeshStandardMaterial({ 
+        color: 0xFBBC05,
+        emissive: 0xFBBC05,
+        emissiveIntensity: 0.5
+    });
     
     const tube1 = new THREE.Mesh(geometry1, material1);
-    scene.add(tube1);
-    dataObjects.push(tube1);
+    
+    // Create arrow group for animations
+    const arrowGroup = new THREE.Group();
+    arrowGroup.add(tube1);
+    scene.add(arrowGroup);
+    arrowObjects.push(arrowGroup);
     
     // Second arrow (index2 to index1)
     const points2 = [];
@@ -1370,89 +1877,151 @@ function addSwapArrows(index1, index2, data) {
     }
     
     const curve2 = new THREE.CatmullRomCurve3(points2);
-    const geometry2 = new THREE.TubeGeometry(curve2, 20, 0.1, 8, false);
-    const material2 = new THREE.MeshBasicMaterial({ color: 0xFBBC05 }); // Yellow
+    const geometry2 = new THREE.TubeGeometry(curve2, 30, state.focusMode ? 0.6 : 0.2, 12, false);
+    const material2 = new THREE.MeshStandardMaterial({ 
+        color: 0xFBBC05,
+        emissive: 0xFBBC05,
+        emissiveIntensity: 0.5
+    });
     
     const tube2 = new THREE.Mesh(geometry2, material2);
-    scene.add(tube2);
-    dataObjects.push(tube2);
+    arrowGroup.add(tube2);
     
     // Add arrow tips
-    const tipSize = 0.3;
-    const tipGeometry = new THREE.ConeGeometry(tipSize, tipSize * 2, 8);
-    const tipMaterial = new THREE.MeshBasicMaterial({ color: 0xFBBC05 });
+    const tipSize = state.focusMode ? 1.2 : 0.4;
+    const tipGeometry = new THREE.ConeGeometry(tipSize, tipSize * 2, 16);
+    const tipMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xFBBC05,
+        emissive: 0xFBBC05,
+        emissiveIntensity: 0.5
+    });
     
     // Tip at end of first arrow
     const endTip1 = new THREE.Mesh(tipGeometry, tipMaterial);
     endTip1.position.set(x2, height1 * Math.sin(Math.PI * 1), 0);
     endTip1.rotation.z = Math.PI / 2;
-    scene.add(endTip1);
-    dataObjects.push(endTip1);
+    arrowGroup.add(endTip1);
     
     // Tip at end of second arrow
     const endTip2 = new THREE.Mesh(tipGeometry, tipMaterial);
     endTip2.position.set(x1, height2 * Math.sin(Math.PI * 1), 0);
     endTip2.rotation.z = -Math.PI / 2;
-    scene.add(endTip2);
-    dataObjects.push(endTip2);
+    arrowGroup.add(endTip2);
     
-    // Add swap text
+    // Add swap text with enhanced styling
     const textCanvas = document.createElement('canvas');
     const ctx = textCanvas.getContext('2d');
-    textCanvas.width = 128;
-    textCanvas.height = 64;
-    ctx.fillStyle = 'white';
-    ctx.font = '24px Inter, Arial';
+    textCanvas.width = 512;
+    textCanvas.height = 128;
+    
+    // Create a background for better text visibility
+    ctx.fillStyle = 'rgba(251, 188, 5, 0.9)'; // Yellow background
+    ctx.roundRect(0, 0, 512, 128, 20);
+    ctx.fill();
+    
+    // Add text
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    ctx.font = 'bold 64px Inter, Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Swap', 64, 32);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SWAP', 256, 64);
     
     const textTexture = new THREE.CanvasTexture(textCanvas);
     const textMaterial = new THREE.SpriteMaterial({ map: textTexture });
     const textSprite = new THREE.Sprite(textMaterial);
-    textSprite.scale.set(3, 1.5, 1.5);
-    textSprite.position.set((x1 + x2) / 2, height2 + 1, 0);
+    const textScale = state.focusMode ? 8 : 4;
+    textSprite.scale.set(textScale, textScale / 4, 1);
+    textSprite.position.set((x1 + x2) / 2, height2 + (state.focusMode ? 6 : 2), 0);
     scene.add(textSprite);
-    dataObjects.push(textSprite);
+    stepLabels.push(textSprite);
+    
+    // Add specific swap text showing values
+    const swapTextCanvas = document.createElement('canvas');
+    const swapCtx = swapTextCanvas.getContext('2d');
+    swapTextCanvas.width = 512;
+    swapTextCanvas.height = 128;
+    
+    // Create background
+    swapCtx.fillStyle = 'rgba(30, 30, 50, 0.95)';
+    swapCtx.roundRect(0, 0, 512, 128, 16);
+    swapCtx.fill();
+    
+    // Add border
+    swapCtx.strokeStyle = 'rgba(251, 188, 5, 0.8)';
+    swapCtx.lineWidth = 4;
+    swapCtx.roundRect(0, 0, 512, 128, 16);
+    swapCtx.stroke();
+    
+    // Add text
+    swapCtx.fillStyle = 'white';
+    swapCtx.font = 'bold 48px Inter, Arial, sans-serif';
+    swapCtx.textAlign = 'center';
+    swapCtx.textBaseline = 'middle';
+    swapCtx.fillText(`${data[index1]} ⟷ ${data[index2]}`, 256, 64);
+    
+    const swapTextTexture = new THREE.CanvasTexture(swapTextCanvas);
+    const swapTextMaterial = new THREE.SpriteMaterial({ map: swapTextTexture });
+    const swapTextSprite = new THREE.Sprite(swapTextMaterial);
+    swapTextSprite.scale.set(textScale, textScale / 4, 1);
+    swapTextSprite.position.set((x1 + x2) / 2, height2 + (state.focusMode ? 12 : 5), 0);
+    scene.add(swapTextSprite);
+    stepLabels.push(swapTextSprite);
 }
 
-// Add pivot indicator for quicksort
+// Add pivot indicator for quicksort with enhanced styling
 function addPivotIndicator(pivotIndex, data) {
     // Calculate position
-    const baseSize = 1;
-    const spacing = 0.2;
+    const baseSize = state.focusMode ? 6 : 2;
+    const spacing = state.focusMode ? 10 : 2;
     const totalWidth = data.length * (baseSize + spacing) - spacing;
     const startX = -totalWidth / 2 + baseSize / 2;
     
     const pivotX = startX + pivotIndex * (baseSize + spacing);
     
     // Create a ring to highlight the pivot
-    const ringGeometry = new THREE.TorusGeometry(0.8, 0.1, 16, 32);
-    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x4285F4, transparent: true, opacity: 0.8 });
+    const ringSize = state.focusMode ? 5 : 1.5;
+    const ringGeometry = new THREE.TorusGeometry(ringSize, ringSize * 0.15, 32, 48);
+    const ringMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xFF9800,
+        emissive: 0xFF9800,
+        emissiveIntensity: 0.5,
+        transparent: true, 
+        opacity: 0.9
+    });
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-    ring.position.set(pivotX, 5, 0);
+    ring.position.set(pivotX, state.focusMode ? 20 : 8, 0);
     ring.rotation.x = Math.PI / 2;
     scene.add(ring);
     dataObjects.push(ring);
     
-    // Add pivot text
+    // Add pivot text with enhanced styling
     const textCanvas = document.createElement('canvas');
     const ctx = textCanvas.getContext('2d');
-    textCanvas.width = 128;
-    textCanvas.height = 64;
-    ctx.fillStyle = 'white';
-    ctx.font = '24px Inter, Arial';
+    textCanvas.width = 512;
+    textCanvas.height = 128;
+    
+    // Create a background for better text visibility
+    ctx.fillStyle = 'rgba(255, 152, 0, 0.9)'; // Orange background
+    ctx.roundRect(0, 0, 512, 128, 20);
+    ctx.fill();
+    
+    // Add text
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    ctx.font = 'bold 64px Inter, Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Pivot', 64, 32);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PIVOT', 256, 64);
     
     const textTexture = new THREE.CanvasTexture(textCanvas);
     const textMaterial = new THREE.SpriteMaterial({ map: textTexture });
     const textSprite = new THREE.Sprite(textMaterial);
-    textSprite.scale.set(3, 1.5, 1.5);
-    textSprite.position.set(pivotX, 7, 0);
+    const textScale = state.focusMode ? 8 : 4;
+    textSprite.scale.set(textScale, textScale / 4, 1);
+    textSprite.position.set(pivotX, state.focusMode ? 30 : 12, 0);
     scene.add(textSprite);
-    dataObjects.push(textSprite);
+    stepLabels.push(textSprite);
     
-    // Animate the ring
+    // Animate the ring with pulsing effect
     const initialScale = ring.scale.clone();
     const startTime = Date.now();
     const duration = 2000;
@@ -1461,7 +2030,7 @@ function addPivotIndicator(pivotIndex, data) {
         const elapsed = Date.now() - startTime;
         const progress = (elapsed % duration) / duration;
         
-        const scale = 1 + 0.2 * Math.sin(progress * Math.PI * 2);
+        const scale = 1 + 0.3 * Math.sin(progress * Math.PI * 2);
         ring.scale.set(scale, scale, scale);
         
         requestAnimationFrame(animateRing);

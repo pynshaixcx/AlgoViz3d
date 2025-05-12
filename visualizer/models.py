@@ -18,7 +18,7 @@ class DataStructure(models.Model):
         return self.name
 
 class Algorithm(models.Model):
-    """Model representing an algorithm"""
+    """Model representing an algorithm with enhanced educational fields"""
     CATEGORIES = [
         ('search', 'Searching Algorithms'),
         ('sort', 'Sorting Algorithms'),
@@ -34,6 +34,13 @@ class Algorithm(models.Model):
     time_complexity = models.CharField(max_length=100)
     space_complexity = models.CharField(max_length=100)
     data_structures = models.ManyToManyField(DataStructure, related_name='algorithms')
+    
+    # Enhanced educational fields
+    educational_notes = models.TextField(blank=True, help_text='Detailed educational explanation of how the algorithm works')
+    step_by_step_explanation = models.TextField(blank=True, help_text='Written step-by-step explanation of the algorithm')
+    best_use_cases = models.TextField(blank=True, help_text='When this algorithm performs best')
+    limitations = models.TextField(blank=True, help_text='Limitations or drawbacks of this algorithm')
+    historical_context = models.TextField(blank=True, help_text='Historical development of the algorithm')
     
     def __str__(self):
         return self.name
