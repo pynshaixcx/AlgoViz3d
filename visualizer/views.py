@@ -2,10 +2,16 @@ from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
 import json
+import logging
 
 from .models import Algorithm, DataStructure, Visualization
 from .algorithm_engine import execute_algorithm_steps
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 def index(request):
     """Main landing page"""
@@ -66,34 +72,65 @@ def visualization(request, algorithm_id):
 def execute_algorithm(request):
     """API endpoint to execute an algorithm and return visualization steps"""
     try:
-        data = json.loads(request.body)
+        # Parse the request data
+        data = request.data
         algorithm_id = data.get('algorithm_id')
         input_data = data.get('input_data', [])
         
+        # Validate input data
+        if not algorithm_id:
+            return Response({'error': 'Algorithm ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not input_data or not isinstance(input_data, list):
+            return Response({'error': 'Valid input data array is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
         # Get algorithm
-        algorithm = get_object_or_404(Algorithm, id=algorithm_id)
+        try:
+            algorithm = Algorithm.objects.get(id=algorithm_id)
+        except Algorithm.DoesNotExist:
+            return Response({'error': 'Algorithm not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Log the algorithm execution request
+        logger.info(f"Executing algorithm: {algorithm.name} with {len(input_data)} elements")
         
         # Execute algorithm and get steps
-        steps = execute_algorithm_steps(algorithm.name, input_data)
+        try:
+            steps = execute_algorithm_steps(algorithm.name, input_data)
+            
+            # Ensure steps is a list
+            if not isinstance(steps, list):
+                steps = [{'type': 'error', 'description': 'Algorithm execution did not return valid steps'}]
+                
+            # If steps is empty, add a placeholder step
+            if len(steps) == 0:
+                steps = [{'type': 'placeholder', 'description': 'No visualization steps returned', 'state': input_data}]
+        except Exception as e:
+            logger.error(f"Error executing algorithm: {str(e)}")
+            # Create a default step showing the input data
+            steps = [
+                {'type': 'error', 'description': f'Error executing algorithm: {str(e)}', 'state': input_data}
+            ]
         
         # Create visualization record if user is authenticated
         if request.user.is_authenticated:
-            Visualization.objects.create(
-                algorithm=algorithm,
-                input_data=input_data,
-                steps=steps,
-                user=request.user,
-                name=f"{algorithm.name} - {len(input_data)} elements"
-            )
+            try:
+                Visualization.objects.create(
+                    algorithm=algorithm,
+                    input_data=input_data,
+                    steps=steps,
+                    user=request.user,
+                    name=f"{algorithm.name} - {len(input_data)} elements"
+                )
+            except Exception as e:
+                logger.error(f"Error saving visualization: {str(e)}")
         
-        return JsonResponse({
+        return Response({
             'algorithm': algorithm.name,
             'steps': steps,
             'time_complexity': algorithm.time_complexity,
             'space_complexity': algorithm.space_complexity,
         })
     
-    except Algorithm.DoesNotExist:
-        return JsonResponse({'error': 'Algorithm not found'}, status=404)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        logger.error(f"Unexpected error in execute_algorithm: {str(e)}")
+        return Response({'error': f'Server error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

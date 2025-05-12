@@ -13,10 +13,103 @@
     </div>
     
     <div class="visualization-container">
-        <div class="visualization-sidebar">
-            <div class="sidebar-section">
-                <h2>Algorithm Info</h2>
-                <div class="algorithm-info">
+        <!-- Main visualization area -->
+        <div class="visualization-canvas" id="visualization-canvas">
+            <!-- Three.js visualization will be rendered here -->
+        </div>
+        
+        <!-- Enhanced Controls Section -->
+        <div class="visualization-controls">
+            <!-- Playback controls on the left -->
+            <div class="left-controls">
+                <div class="playback-controls">
+                    <button id="step-backward" class="control-btn" title="Step Backward (Left Arrow)">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 5V19L10 12L20 5Z" fill="currentColor"/></svg>
+                    </button>
+                    
+                    <button id="play-pause" class="control-btn" title="Play/Pause (Space)">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 5V19L19 12L8 5Z" fill="currentColor"/></svg>
+                    </button>
+                    
+                    <button id="step-forward" class="control-btn" title="Step Forward (Right Arrow)">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 5V19L14 12L4 5Z" fill="currentColor"/></svg>
+                    </button>
+                    
+                    <button id="reset" class="control-btn" title="Reset (R)">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.99988C16.9706 2.99988 21 7.02931 21 11.9999C21 16.9704 16.9706 20.9999 12 20.9999C7.02944 20.9999 3 16.9704 3 11.9999C3 9.17261 4.30367 6.64978 6.34267 4.99988" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 4.49988H7V8.49988" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    
+                    <div class="speed-control">
+                        <label for="animation-speed">Speed:</label>
+                        <input type="range" id="animation-speed" min="1" max="10" value="5">
+                        <span id="speed-display">5x</span>
+                    </div>
+                </div>
+                
+                <div class="step-info-panel">
+                    <div id="step-counter" class="step-counter">Step 0 of 0</div>
+                    <div id="step-description" class="step-description">Initial state</div>
+                </div>
+                
+                <div class="view-controls">
+                    <button id="camera-reset" class="control-btn" title="Reset Camera (C)">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 9L9 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 9L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    
+                    <button id="toggle-2d-3d" class="control-btn" title="Toggle 2D/3D View (V)">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L20 7.5V16.5L12 21L4 16.5V7.5L12 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12L20 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12L4 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Visualization options on the right -->
+            <div class="right-controls">
+                <div class="algorithm-options">
+                    <div class="option-card">
+                        <div class="option-title">Shape Options</div>
+                        <div id="shape-selector" class="shape-selector">
+                            <!-- Shape options will be dynamically added here -->
+                        </div>
+                    </div>
+                    
+                    <div class="option-card">
+                        <div class="option-title">Color Theme</div>
+                        <div id="theme-selector" class="visualization-theme">
+                            <!-- Theme options will be dynamically added here -->
+                        </div>
+                    </div>
+                    
+                    <div class="option-card">
+                        <div class="option-title">Input Data</div>
+                        <div class="input-field">
+                            <label for="input-size">Size:</label>
+                            <input type="range" id="input-size" min="5" max="50" value="10">
+                            <span id="size-value">10</span>
+                        </div>
+                        
+                        <div class="input-buttons">
+                            <button id="generate-random" class="btn btn-secondary btn-small">Random</button>
+                            <button id="generate-nearly-sorted" class="btn btn-secondary btn-small">Nearly Sorted</button>
+                            <button id="generate-reversed" class="btn btn-secondary btn-small">Reversed</button>
+                        </div>
+                    </div>
+                    
+                    <div class="option-card">
+                        <div class="option-title">Custom Input</div>
+                        <div class="input-field-wrapper">
+                            <input type="text" id="custom-input-data" class="input-field" placeholder="e.g. 3,1,4,1,5,9,2,6">
+                            <button id="apply-custom" class="btn btn-primary btn-small">Apply</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Algorithm information -->
+        <div class="algorithm-info-panel">
+            <div class="panel-section">
+                <h3>Algorithm Info</h3>
+                <div class="info-content">
                     <p>{{ algorithm.description }}</p>
                     
                     <div class="complexity-info">
@@ -32,94 +125,14 @@
                 </div>
             </div>
             
-            <div class="sidebar-section">
-                <h2>Input Data</h2>
-                <div class="input-controls">
-                    <div class="input-field">
-                        <label for="input-size">Size:</label>
-                        <input type="range" id="input-size" min="5" max="50" value="10">
-                        <span id="size-value">10</span>
-                    </div>
-                    
-                    <div class="input-options">
-                        <button id="generate-random" class="btn btn-secondary btn-small">Random</button>
-                        <button id="generate-nearly-sorted" class="btn btn-secondary btn-small">Nearly Sorted</button>
-                        <button id="generate-reversed" class="btn btn-secondary btn-small">Reversed</button>
-                    </div>
-                    
-                    <div class="custom-input">
-                        <label for="custom-input-data">Custom Input:</label>
-                        <input type="text" id="custom-input-data" placeholder="e.g. 3,1,4,1,5,9,2,6">
-                        <button id="apply-custom" class="btn btn-secondary btn-small">Apply</button>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="sidebar-section">
-                <h2>Code Implementation</h2>
-                <div class="code-display">
+            <div class="panel-section">
+                <h3>Algorithm Code</h3>
+                <div class="code-block">
                     <pre><code id="algorithm-code">{{ algorithm.code_implementation }}</code></pre>
                 </div>
             </div>
         </div>
-        
-        <div class="visualization-main">
-            <div class="visualization-canvas" id="visualization-canvas">
-                <!-- Three.js visualization will be inserted here -->
-            </div>
-            
-            <div class="visualization-controls">
-                <div class="playback-controls">
-                    <button id="step-backward" class="control-btn" title="Step Backward">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 16.9154V7.08463C21 5.56902 19.3115 4.66147 18.0009 5.34123L12.2968 8.27639C11.0823 8.90237 11.0823 10.6149 12.2968 11.2409L18.0009 14.176C19.3115 14.8558 21 13.9482 21 12.4326V16.9154Z" fill="currentColor"/><path d="M9 16.9154V7.08463C9 5.56902 7.31149 4.66147 6.00089 5.34123L0.296824 8.27639C-0.917693 8.90237 -0.917694 10.6149 0.296824 11.2409L6.00089 14.176C7.31149 14.8558 9 13.9482 9 12.4326V16.9154Z" fill="currentColor"/></svg>
-                    </button>
-                    <button id="play-pause" class="control-btn" title="Play/Pause">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 5V19L19 12L8 5Z" fill="currentColor"/></svg>
-                    </button>
-                    <button id="step-forward" class="control-btn" title="Step Forward">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7.08463V16.9154C3 18.431 4.68851 19.3385 5.99911 18.6588L11.7032 15.7236C12.9177 15.0976 12.9177 13.3851 11.7032 12.7591L5.99911 9.82397C4.68851 9.14421 3 10.0518 3 11.5674V7.08463Z" fill="currentColor"/><path d="M15 7.08463V16.9154C15 18.431 16.6885 19.3385 17.9991 18.6588L23.7032 15.7236C24.9177 15.0976 24.9177 13.3851 23.7032 12.7591L17.9991 9.82397C16.6885 9.14421 15 10.0518 15 11.5674V7.08463Z" fill="currentColor"/></svg>
-                    </button>
-                    <button id="reset" class="control-btn" title="Reset">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.99988C16.9706 2.99988 21 7.02931 21 11.9999C21 16.9704 16.9706 20.9999 12 20.9999C7.02944 20.9999 3 16.9704 3 11.9999C3 9.17261 4.30367 6.64978 6.34267 4.99988" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 4.49988H7V8.49988" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                </div>
-                
-                <div class="speed-control">
-                    <label for="animation-speed">Speed:</label>
-                    <input type="range" id="animation-speed" min="1" max="10" value="5">
-                </div>
-                
-                <div class="step-info">
-                    <span id="current-step">Step 0 of 0</span>
-                    <span id="step-description">Initial state</span>
-                </div>
-                
-                <div class="view-controls">
-                    <button id="camera-reset" class="control-btn" title="Reset Camera">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 9L9 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 9L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                    <button id="toggle-2d-3d" class="control-btn" title="Toggle 2D/3D View">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3L20 7.5V16.5L12 21L4 16.5V7.5L12 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12L20 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12L4 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="step-description-panel">
-                <h3>Current Operation:</h3>
-                <p id="detailed-step-description">Select an algorithm and input data to begin visualization.</p>
-            </div>
-        </div>
     </div>
-    
-    {% if user.is_authenticated %}
-    <div class="save-visualization">
-        <button id="save-btn" class="btn btn-primary">Save This Visualization</button>
-        <div id="save-form" class="save-form hidden">
-            <input type="text" id="visualization-name" placeholder="Visualization Name">
-            <button id="confirm-save" class="btn btn-secondary">Save</button>
-        </div>
-    </div>
-    {% endif %}
 </div>
 {% endblock %}
 
@@ -134,3 +147,4 @@
 </script>
 <script src="/static/js/algorithm-visualization.js"></script>
 {% endblock %}
+</template>
