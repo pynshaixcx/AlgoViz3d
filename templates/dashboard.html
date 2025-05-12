@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+
+{% block title %}AlgoViz3D - Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h1>Algorithm Visualization Dashboard</h1>
+        <p>Select an algorithm or data structure to begin the 3D visualization experience</p>
+    </div>
+    
+    <div class="dashboard-content">
+        <div class="dashboard-sidebar">
+            <div class="sidebar-section">
+                <h2>Data Structures</h2>
+                <div class="accordion">
+                    {% for category, structures in data_structure_categories.items %}
+                        <div class="accordion-item">
+                            <button class="accordion-header">
+                                {% if category == 'linear' %}
+                                    Linear Data Structures
+                                {% elif category == 'tree' %}
+                                    Tree Structures
+                                {% elif category == 'graph' %}
+                                    Graph Structures
+                                {% elif category == 'hash' %}
+                                    Hashing Structures
+                                {% endif %}
+                                <span class="accordion-icon">+</span>
+                            </button>
+                            <div class="accordion-content">
+                                <ul class="sidebar-list">
+                                    {% for structure in structures %}
+                                        <li>
+                                            <a href="#" data-structure-id="{{ structure.id }}" class="structure-link">
+                                                {{ structure.name }}
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h2>Algorithms</h2>
+                <div class="accordion">
+                    {% for category, algorithms in algorithm_categories.items %}
+                        <div class="accordion-item">
+                            <button class="accordion-header">
+                                {% if category == 'search' %}
+                                    Searching Algorithms
+                                {% elif category == 'sort' %}
+                                    Sorting Algorithms
+                                {% elif category == 'tree' %}
+                                    Tree Operations
+                                {% elif category == 'graph' %}
+                                    Graph Algorithms
+                                {% elif category == 'array' %}
+                                    Array/List Operations
+                                {% endif %}
+                                <span class="accordion-icon">+</span>
+                            </button>
+                            <div class="accordion-content">
+                                <ul class="sidebar-list">
+                                    {% for algorithm in algorithms %}
+                                        <li>
+                                            <a href="/visualization/{{ algorithm.id }}/" class="algorithm-link">
+                                                {{ algorithm.name }}
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            {% if user.is_authenticated %}
+            <div class="sidebar-section">
+                <h2>My Visualizations</h2>
+                <div class="recent-visualizations">
+                    <p>Your recent visualizations will appear here.</p>
+                    <a href="/accounts/profile/" class="btn btn-secondary btn-small">View All</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="dashboard-main">
+            <div class="preview-container">
+                <div class="preview-header">
+                    <h2>Algorithm Previews</h2>
+                    <div class="preview-controls">
+                        <button id="preview-random" class="btn btn-secondary btn-small">Generate Random Data</button>
+                    </div>
+                </div>
+                
+                <div class="preview-visualization" id="preview-visualization">
+                    <!-- Three.js visualization will be inserted here -->
+                    <div class="preview-placeholder">
+                        <p>Select an algorithm or data structure to preview</p>
+                    </div>
+                </div>
+                
+                <div class="preview-info hidden">
+                    <h3 id="preview-title">Algorithm Name</h3>
+                    <div class="preview-description" id="preview-description">
+                        Select an algorithm to see its description.
+                    </div>
+                    <div class="preview-complexity">
+                        <div class="complexity-item">
+                            <span class="complexity-label">Time Complexity:</span>
+                            <span class="complexity-value" id="time-complexity">-</span>
+                        </div>
+                        <div class="complexity-item">
+                            <span class="complexity-label">Space Complexity:</span>
+                            <span class="complexity-value" id="space-complexity">-</span>
+                        </div>
+                    </div>
+                    <a href="#" id="preview-start-btn" class="btn btn-primary">Start Visualization</a>
+                </div>
+            </div>
+            
+            <div class="popular-algorithms">
+                <h2>Popular Algorithms</h2>
+                <div class="algorithm-grid">
+                    <div class="algorithm-grid-item">
+                        <h3>Quicksort</h3>
+                        <p>A divide-and-conquer sorting algorithm with average O(n log n) time complexity.</p>
+                        <a href="/visualization/5/" class="btn btn-small">Visualize</a>
+                    </div>
+                    <div class="algorithm-grid-item">
+                        <h3>Dijkstra's Algorithm</h3>
+                        <p>Find the shortest path between nodes in a graph with positive edge weights.</p>
+                        <a href="/visualization/12/" class="btn btn-small">Visualize</a>
+                    </div>
+                    <div class="algorithm-grid-item">
+                        <h3>Binary Search</h3>
+                        <p>Efficiently find a value in a sorted array with O(log n) time complexity.</p>
+                        <a href="/visualization/7/" class="btn btn-small">Visualize</a>
+                    </div>
+                    <div class="algorithm-grid-item">
+                        <h3>BFS</h3>
+                        <p>Breadth-first search traverses a graph level by level to find the shortest path.</p>
+                        <a href="/visualization/10/" class="btn btn-small">Visualize</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
+<script src="/static/js/preview-visualization.js"></script>
+{% endblock %}
