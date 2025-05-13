@@ -1,15 +1,15 @@
 {
   "status": "done",
   "assets": {
-    "main-6ca4116a89f58baa02e0.js": {
-      "name": "main-6ca4116a89f58baa02e0.js",
-      "path": "/Users/pynshainongsiej/Documents/Project/AlgoViz3d/static/frontend/main-6ca4116a89f58baa02e0.js",
-      "publicPath": "/static/frontend/main-6ca4116a89f58baa02e0.js"
+    "main-2c1e1a733be95fc32b57.js": {
+      "name": "main-2c1e1a733be95fc32b57.js",
+      "path": "/Users/pynshainongsiej/Documents/Project/AlgoViz3d/static/frontend/main-2c1e1a733be95fc32b57.js",
+      "publicPath": "/static/frontend/main-2c1e1a733be95fc32b57.js"
     }
   },
   "chunks": {
     "main": [
-      "main-6ca4116a89f58baa02e0.js"
+      "main-2c1e1a733be95fc32b57.js"
     ]
   },
   "publicPath": "/static/frontend/"

@@ -7,16 +7,20 @@ import {
   Code, Info, X, AlertCircle
 } from 'lucide-react';
 
-// Shape geometries
+// Import the external CSS file - this avoids JSX template string errors
+import './VisualizationStyles.css';
+
+// Enhanced shape geometries with better visual details
 const SHAPES = {
   cube: (size) => new THREE.BoxGeometry(size, size, size),
-  sphere: (size) => new THREE.SphereGeometry(size * 0.6, 32, 32),
-  cylinder: (size) => new THREE.CylinderGeometry(size * 0.5, size * 0.5, size, 32),
-  pyramid: (size) => new THREE.ConeGeometry(size * 0.7, size, 4),
-  diamond: (size) => new THREE.OctahedronGeometry(size * 0.7, 0)
+  sphere: (size) => new THREE.SphereGeometry(size * 0.6, 32, 32), // Increased segments
+  cylinder: (size) => new THREE.CylinderGeometry(size * 0.5, size * 0.5, size, 32), // Smoother cylinder
+  pyramid: (size) => new THREE.ConeGeometry(size * 0.7, size, 4, 2), // More detailed pyramid
+  diamond: (size) => new THREE.OctahedronGeometry(size * 0.7, 2), // Higher detail diamond
+  torus: (size) => new THREE.TorusGeometry(size * 0.4, size * 0.2, 16, 32) // New shape option
 };
 
-// Color themes
+// Enhanced color themes with better contrasts and accents
 const THEMES = {
   blue: {
     default: 0x4285F4,
@@ -24,7 +28,9 @@ const THEMES = {
     swap: 0xFBBC05,
     sorted: 0x34A853,
     selected: 0xAA46BC,
-    background: '#0a1929',
+    background: '#061023', // Darker for better contrast
+    surface: '#0a1929',
+    accent: '#64b5f6',
     text: '#ffffff'
   },
   green: {
@@ -33,7 +39,9 @@ const THEMES = {
     swap: 0xFBBC05,
     sorted: 0x4285F4,
     selected: 0xAA46BC,
-    background: '#0a291c',
+    background: '#051a15',
+    surface: '#0a291c',
+    accent: '#81c784',
     text: '#ffffff'
   },
   purple: {
@@ -42,7 +50,9 @@ const THEMES = {
     swap: 0xFBBC05,
     sorted: 0x34A853,
     selected: 0x4285F4,
-    background: '#1a0a29',
+    background: '#130a29',
+    surface: '#1a0a29',
+    accent: '#ba68c8',
     text: '#ffffff'
   },
   dark: {
@@ -51,10 +61,31 @@ const THEMES = {
     swap: 0xFFB300,
     sorted: 0x66BB6A,
     selected: 0x448AFF,
-    background: '#121212',
+    background: '#0a0a0a',
+    surface: '#121212',
+    accent: '#90caf9',
     text: '#ffffff'
   }
 };
+
+// Simple vertex shader for glow effect
+const glowVertexShader = `
+  varying vec3 vNormal;
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+// Simple fragment shader for glow effect
+const glowFragmentShader = `
+  uniform vec3 color;
+  varying vec3 vNormal;
+  void main() {
+    float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
+    gl_FragColor = vec4(color, 1.0) * intensity;
+  }
+`;
 
 const VisualizationPlayer = ({ 
   algorithm, 
@@ -80,7 +111,9 @@ const VisualizationPlayer = ({
     isFullscreen: false,
     loading: false,
     error: null,
-    customInputText: ''
+    customInputText: '',
+    // Focused elements for limiting visualization to important elements
+    focusedElements: []
   });
   
   // Refs
@@ -94,6 +127,8 @@ const VisualizationPlayer = ({
   const dataObjectsRef = useRef([]);
   const textLabelsRef = useRef([]);
   const arrowsRef = useRef([]);
+  const particleSystemRef = useRef(null);
+  const backgroundPlaneRef = useRef(null);
   
   // Setup Three.js scene on mount
   useEffect(() => {
@@ -142,62 +177,41 @@ const VisualizationPlayer = ({
     return cookieValue;
   };
   
-  // Setup Three.js scene
+  // Setup Three.js scene with enhanced visuals
   const setupScene = () => {
     // Create scene
     const scene = new THREE.Scene();
+    
+    // Set background color based on theme
     scene.background = new THREE.Color(THEMES[state.colorTheme].background);
     sceneRef.current = scene;
     
-    // Add grid
-    const gridHelper = new THREE.GridHelper(100, 50, 0x304FFE, 0x1A237E);
-    gridHelper.material.opacity = 0.15;
-    gridHelper.material.transparent = true;
-    scene.add(gridHelper);
+    // Create enhanced background with particles and subtle grid
+    createEnhancedBackground();
     
-    // Add camera
+    // Add camera with better positioning
     const width = canvasRef.current.clientWidth;
     const height = canvasRef.current.clientHeight;
     const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1000);
     camera.position.set(0, 40, 60);
     cameraRef.current = camera;
     
-    // Add renderer
+    // Add renderer with better quality settings
     const renderer = new THREE.WebGLRenderer({ 
       antialias: true,
-      alpha: true
+      alpha: true,
+      powerPreference: "high-performance"
     });
     renderer.setSize(width, height);
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     canvasRef.current.innerHTML = '';
     canvasRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
     
-    // Add lighting
-    const ambientLight = new THREE.AmbientLight(0x404080, 0.6);
-    scene.add(ambientLight);
-    
-    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    mainLight.position.set(10, 30, 20);
-    mainLight.castShadow = true;
-    mainLight.shadow.mapSize.width = 2048;
-    mainLight.shadow.mapSize.height = 2048;
-    mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 150;
-    mainLight.shadow.camera.left = -70;
-    mainLight.shadow.camera.right = 70;
-    mainLight.shadow.camera.top = 70;
-    mainLight.shadow.camera.bottom = -70;
-    scene.add(mainLight);
-    
-    const fillLight = new THREE.DirectionalLight(0x9090ff, 0.6);
-    fillLight.position.set(-10, 20, -15);
-    scene.add(fillLight);
-    
-    const pointLight = new THREE.PointLight(0x3f51b5, 0.8, 100);
-    pointLight.position.set(-10, 20, 5);
-    scene.add(pointLight);
+    // Add enhanced lighting
+    setupLighting();
     
     // Add OrbitControls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -221,6 +235,9 @@ const VisualizationPlayer = ({
       // Animate focused elements (if needed)
       animateFocusedElements();
       
+      // Animate particle system
+      animateParticles();
+      
       rendererRef.current.render(sceneRef.current, cameraRef.current);
     };
     
@@ -228,6 +245,113 @@ const VisualizationPlayer = ({
     
     // Handle window resize
     window.addEventListener('resize', handleResize);
+  };
+  
+  // Create enhanced background with particles
+  const createEnhancedBackground = () => {
+    if (!sceneRef.current) return;
+    
+    // Create a subtle grid as the floor
+    const gridHelper = new THREE.GridHelper(100, 50, 0x304FFE, 0x1A237E);
+    gridHelper.material.opacity = 0.08;
+    gridHelper.material.transparent = true;
+    gridHelper.position.y = -5;
+    sceneRef.current.add(gridHelper);
+    
+    // Add a subtle base plane for shadow casting
+    const planeGeometry = new THREE.PlaneGeometry(200, 200);
+    const planeMaterial = new THREE.MeshStandardMaterial({
+      color: THEMES[state.colorTheme].surface,
+      transparent: true,
+      opacity: 0.3,
+      roughness: 0.8,
+      metalness: 0.2,
+      side: THREE.DoubleSide
+    });
+    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+    plane.rotation.x = Math.PI / 2;
+    plane.position.y = -5;
+    plane.receiveShadow = true;
+    sceneRef.current.add(plane);
+    backgroundPlaneRef.current = plane;
+    
+    // Add particle system for ambient background detail
+    const particleGeometry = new THREE.BufferGeometry();
+    const particleCount = 300;
+    const posArray = new Float32Array(particleCount * 3);
+    
+    for (let i = 0; i < particleCount * 3; i += 3) {
+      // Create a spherical distribution
+      const radius = 30 + Math.random() * 70;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI;
+      
+      posArray[i] = radius * Math.sin(phi) * Math.cos(theta);
+      posArray[i+1] = radius * Math.sin(phi) * Math.sin(theta) - 10; // Lowered to be mostly below view
+      posArray[i+2] = radius * Math.cos(phi);
+    }
+    
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    
+    // Create a point material with custom texture for better particles
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 0.4,
+      color: new THREE.Color(THEMES[state.colorTheme].accent),
+      transparent: true,
+      opacity: 0.3,
+      blending: THREE.AdditiveBlending,
+    });
+    
+    const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+    sceneRef.current.add(particleSystem);
+    particleSystemRef.current = particleSystem;
+  };
+  
+  // Setup enhanced lighting
+  const setupLighting = () => {
+    if (!sceneRef.current) return;
+    
+    // Main ambient light
+    const ambientLight = new THREE.AmbientLight(0x404080, 0.6);
+    sceneRef.current.add(ambientLight);
+    
+    // Primary directional light with shadows
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    mainLight.position.set(10, 30, 20);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 2048;
+    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 150;
+    mainLight.shadow.camera.left = -70;
+    mainLight.shadow.camera.right = 70;
+    mainLight.shadow.camera.top = 70;
+    mainLight.shadow.camera.bottom = -70;
+    sceneRef.current.add(mainLight);
+    
+    // Fill light from opposite side
+    const fillLight = new THREE.DirectionalLight(0x9090ff, 0.5);
+    fillLight.position.set(-10, 20, -15);
+    sceneRef.current.add(fillLight);
+    
+    // Accent point light
+    const accentLight = new THREE.PointLight(
+      new THREE.Color(THEMES[state.colorTheme].accent),
+      0.8,
+      100
+    );
+    accentLight.position.set(-10, 20, 5);
+    sceneRef.current.add(accentLight);
+    
+    // Add a subtle spotight for focus
+    const spotLight = new THREE.SpotLight(0xffffff, 0.8);
+    spotLight.position.set(0, 50, 0);
+    spotLight.angle = Math.PI / 6;
+    spotLight.penumbra = 0.3;
+    spotLight.decay = 1;
+    spotLight.distance = 200;
+    spotLight.castShadow = true;
+    sceneRef.current.add(spotLight);
   };
   
   // Handle window resize
@@ -242,42 +366,16 @@ const VisualizationPlayer = ({
     rendererRef.current.setSize(width, height);
   };
   
-  // Cleanup Three.js scene
-  const cleanupScene = () => {
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
-    
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-    
-    window.removeEventListener('resize', handleResize);
-    
-    if (rendererRef.current && rendererRef.current.domElement) {
-      rendererRef.current.dispose();
-    }
-    
-    if (sceneRef.current) {
-      disposeScene(sceneRef.current);
-    }
-  };
-  
-  // Dispose scene objects
-  const disposeScene = (scene) => {
-    scene.traverse((object) => {
-      if (object.geometry) {
-        object.geometry.dispose();
-      }
+  // Animate particles for dynamic background
+  const animateParticles = () => {
+    if (particleSystemRef.current) {
+      const time = Date.now() * 0.0001;
+      particleSystemRef.current.rotation.y = time * 0.1;
       
-      if (object.material) {
-        if (Array.isArray(object.material)) {
-          object.material.forEach(material => material.dispose());
-        } else {
-          object.material.dispose();
-        }
-      }
-    });
+      // Subtle pulsing effect
+      const scale = 1 + 0.05 * Math.sin(time * 2);
+      particleSystemRef.current.material.size = 0.4 * scale;
+    }
   };
   
   // Animate focused elements
@@ -288,14 +386,17 @@ const VisualizationPlayer = ({
     if (!step) return;
     
     // Get focused elements indices
-    let focusedIndices = [];
+    let focusedIndices = state.focusedElements;
     
-    if (step.comparing && step.comparing.length) {
-      focusedIndices = focusedIndices.concat(step.comparing);
-    }
-    
-    if (step.swapped && step.swapped.length) {
-      focusedIndices = focusedIndices.concat(step.swapped);
+    // If no specific focused elements, determine from step type
+    if (focusedIndices.length === 0) {
+      if (step.comparing && step.comparing.length) {
+        focusedIndices = [...step.comparing];
+      }
+      
+      if (step.swapped && step.swapped.length) {
+        focusedIndices = [...step.swapped];
+      }
     }
     
     // Animate arrows if any
@@ -309,15 +410,18 @@ const VisualizationPlayer = ({
           const element = dataObjectsRef.current[index];
           if (element && element.scale) {
             // Apply pulse animation
-            const pulseFactor = 1 + Math.sin(time * 3) * 0.05;
+            const pulseFactor = 1 + Math.sin(time * 3) * 0.08;
             element.scale.set(pulseFactor, pulseFactor, pulseFactor);
+            
+            // Rotate slightly for more dynamic effect
+            element.rotation.y = Math.sin(time * 2) * 0.2;
           }
         }
       });
     }
   };
   
-  // Animate arrows (comparison or swap indicators)
+  // Animate arrows with enhanced effects
   const animateArrows = () => {
     if (!arrowsRef.current.length) return;
     
@@ -325,8 +429,21 @@ const VisualizationPlayer = ({
     arrowsRef.current.forEach(arrow => {
       if (arrow) {
         // Apply pulse animation to arrows
-        const pulseFactor = 1 + Math.sin(time * 2) * 0.1;
-        arrow.scale.y = pulseFactor;
+        const pulseFactor = 1 + Math.sin(time * 2) * 0.15;
+        
+        // Apply different animations based on arrow type
+        if (arrow.userData && arrow.userData.type === 'comparison') {
+          arrow.scale.y = pulseFactor;
+          
+          // Pulse opacity for comparison arrows
+          if (arrow.material) {
+            arrow.material.opacity = 0.7 + Math.sin(time * 3) * 0.3;
+          }
+        } else if (arrow.userData && arrow.userData.type === 'swap') {
+          // For swap arrows, apply a flowing animation
+          arrow.scale.y = pulseFactor;
+          arrow.scale.x = 1 + Math.sin(time * 2.5) * 0.1;
+        }
       }
     });
   };
@@ -598,11 +715,18 @@ const VisualizationPlayer = ({
     // Clear previous visualization
     clearVisualization();
     
-    // Get current step
+    // Get current step and determine focused elements
     const currentStep = state.steps[state.currentStepIndex];
+    const focusedElements = determineFocusedElements(currentStep);
+    
+    // Update state with focused elements
+    setState(prevState => ({
+      ...prevState,
+      focusedElements: focusedElements
+    }));
     
     // Create visualization for current step
-    createVisualization(currentStep);
+    createVisualization(currentStep, focusedElements);
   };
   
   // Clear visualization
@@ -633,8 +757,42 @@ const VisualizationPlayer = ({
     arrowsRef.current = [];
   };
   
+  // Determine focused elements based on step type
+  const determineFocusedElements = (step) => {
+    let focusedElements = [];
+    
+    if (!step) return focusedElements;
+    
+    // Determine focused elements based on step type
+    if (step.comparing && step.comparing.length) {
+      focusedElements = [...step.comparing];
+    }
+    
+    if (step.swapped && step.swapped.length) {
+      // Add swap elements without duplicates
+      step.swapped.forEach(idx => {
+        if (!focusedElements.includes(idx)) {
+          focusedElements.push(idx);
+        }
+      });
+    }
+    
+    // If specific focus is mentioned in the step
+    if (step.current_focus && Array.isArray(step.current_focus)) {
+      focusedElements = [...step.current_focus];
+    }
+    
+    // If in initial state, focus on everything
+    if (step.type === 'initial' || step.type === 'final') {
+      const data = step.state || [];
+      focusedElements = Array.from({ length: data.length }, (_, i) => i);
+    }
+    
+    return focusedElements;
+  };
+  
   // Create visualization from step data
-  const createVisualization = (step) => {
+  const createVisualization = (step, focusedIndices) => {
     if (!sceneRef.current || !step || !step.state) return;
     
     const data = step.state;
@@ -646,22 +804,28 @@ const VisualizationPlayer = ({
     // Find max value for proper scaling
     const maxValue = Math.max(...data, 1);
     
+    // If in focus mode and not initial/final step, show only focused elements
+    // otherwise show all elements with focused ones highlighted
+    const elementsToRender = state.focusMode && 
+                            step.type !== 'initial' && 
+                            step.type !== 'final' && 
+                            focusedIndices.length > 0 ?
+                            [...focusedIndices] : // Only focused elements
+                            [...Array(data.length).keys()]; // All elements
+    
     // Create objects for each data element
-    data.forEach((value, i) => {
+    elementsToRender.forEach((i) => {
+      const value = data[i];
+      
+      // Don't attempt to render undefined elements
+      if (value === undefined) return;
+      
       // Scale height based on value
       const heightScale = Math.max(0.2, value / maxValue);
       const height = baseSize * 5 * heightScale;
       
       // Determine color based on step type
-      let color = THEMES[state.colorTheme].default;
-      
-      if (step.comparing && step.comparing.includes(i)) {
-        color = THEMES[state.colorTheme].comparison;
-      } else if (step.swapped && step.swapped.includes(i)) {
-        color = THEMES[state.colorTheme].swap;
-      } else if (step.sorted_indices && step.sorted_indices.includes(i)) {
-        color = THEMES[state.colorTheme].sorted;
-      }
+      let color = getElementColor(i, step, data.length);
       
       // Create geometry based on selected shape
       let geometry;
@@ -680,6 +844,9 @@ const VisualizationPlayer = ({
         case 'diamond':
           geometry = SHAPES.diamond(shapeSize);
           break;
+        case 'torus':
+          geometry = SHAPES.torus(shapeSize);
+          break;
         case 'cube':
         default:
           geometry = new THREE.BoxGeometry(shapeSize, height, shapeSize);
@@ -690,16 +857,18 @@ const VisualizationPlayer = ({
         geometry.scale(1, heightScale * 5, 1);
       }
       
-      // Create material
+      // Create material with enhanced visual appeal
       const material = new THREE.MeshPhysicalMaterial({
-        color,
+        color: color,
         transparent: true,
-        opacity: 0.9,
-        metalness: 0.5,
+        opacity: focusedIndices.includes(i) ? 1.0 : 0.8,
+        metalness: 0.8,
         roughness: 0.2,
-        reflectivity: 0.5,
-        clearcoat: 0.3,
-        clearcoatRoughness: 0.2
+        reflectivity: 0.7,
+        clearcoat: 0.5,
+        clearcoatRoughness: 0.2,
+        emissive: focusedIndices.includes(i) ? color : 0x000000,
+        emissiveIntensity: focusedIndices.includes(i) ? 0.2 : 0
       });
       
       // Create mesh
@@ -717,7 +886,12 @@ const VisualizationPlayer = ({
       dataObjectsRef.current[i] = mesh;
       
       // Add text label for value
-      addValueLabel(value, mesh, i, height);
+      addValueLabel(value, mesh, i, height, focusedIndices.includes(i));
+      
+      // Add glow effect for focused elements
+      if (focusedIndices.includes(i)) {
+        addGlowEffect(mesh, color);
+      }
     });
     
     // Add operation indicators based on step type
@@ -730,9 +904,35 @@ const VisualizationPlayer = ({
     }
   };
   
+  // Add glow effect to focused elements
+  const addGlowEffect = (mesh, color) => {
+    if (!mesh) return;
+    
+    const glowMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        color: { value: new THREE.Color(color) }
+      },
+      vertexShader: glowVertexShader,
+      fragmentShader: glowFragmentShader,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      side: THREE.BackSide
+    });
+    
+    // Create a slightly larger mesh for the glow effect
+    const glowMesh = new THREE.Mesh(
+      mesh.geometry.clone(),
+      glowMaterial
+    );
+    
+    // Scale it slightly larger than the original mesh
+    glowMesh.scale.multiplyScalar(1.2);
+    mesh.add(glowMesh);
+  };
+  
   // Add value label above each element
-  const addValueLabel = (value, element, index, height) => {
-    if (!sceneRef.current) return;
+  const addValueLabel = (value, element, index, height, isFocused) => {
+    if (!element) return;
     
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -740,13 +940,21 @@ const VisualizationPlayer = ({
     canvas.height = 256;
     
     // Size based on focus mode
-    const fontSize = state.focusMode ? 120 : 84;
+    const fontSize = isFocused ? 120 : 84;
     
     // Background with rounded corners
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillStyle = isFocused ? 'rgba(30, 60, 100, 0.8)' : 'rgba(0, 0, 0, 0.6)';
     ctx.beginPath();
     ctx.roundRect(64, 64, 128, 128, 20);
     ctx.fill();
+    
+    // Add subtle border for focused elements
+    if (isFocused) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = 4;
+      ctx.roundRect(64, 64, 128, 128, 20);
+      ctx.stroke();
+    }
     
     // Text
     ctx.fillStyle = 'white';
@@ -757,11 +965,15 @@ const VisualizationPlayer = ({
     
     // Create sprite with texture
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ map: texture });
+    const material = new THREE.SpriteMaterial({ 
+      map: texture,
+      transparent: true,
+      opacity: isFocused ? 1.0 : 0.7
+    });
     const sprite = new THREE.Sprite(material);
     
     // Scale and position
-    const scale = state.focusMode ? 3 : 1.5;
+    const scale = isFocused ? 3 : 2;
     sprite.scale.set(scale, scale, scale);
     const labelY = element.position.y + (state.visualizationShape === 'cube' ? height + 3 : height * 0.5 + 6);
     sprite.position.set(element.position.x, labelY, 0);
@@ -771,148 +983,469 @@ const VisualizationPlayer = ({
     textLabelsRef.current.push(sprite);
   };
   
-  // Add comparison indicator
+  // Add comparison indicator with enhanced styling
   const addComparisonIndicator = (index1, index2, data) => {
     if (!sceneRef.current || !dataObjectsRef.current[index1] || !dataObjectsRef.current[index2]) return;
     
     const element1 = dataObjectsRef.current[index1];
     const element2 = dataObjectsRef.current[index2];
     
-    // Create an arrow between the two elements
-    const direction = new THREE.Vector3().subVectors(element2.position, element1.position);
-    direction.normalize();
+    // Create an improved arrow between the two elements
+    // Using a curve for more visual appeal
+    const curvePoints = [];
+    const segments = 20;
+    const midX = (element1.position.x + element2.position.x) / 2;
+    const peakY = Math.max(element1.position.y, element2.position.y) + 12;
     
-    const arrowLength = Math.abs(element2.position.x - element1.position.x) * 0.8;
-    const origin = new THREE.Vector3(
-      element1.position.x + direction.x * 2,
-      element1.position.y + 8,
-      element1.position.z
-    );
+    // Create a curved path for the arrow
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const x = THREE.MathUtils.lerp(element1.position.x, element2.position.x, t);
+      
+      // Quadratic curve formula
+      const y = THREE.MathUtils.lerp(
+        element1.position.y, 
+        element2.position.y, 
+        t
+      ) + Math.sin(t * Math.PI) * 8; // Arch height
+      
+      curvePoints.push(new THREE.Vector3(x, y, 0));
+    }
     
-    const arrowHelper = new THREE.ArrowHelper(
-      direction,
-      origin,
-      arrowLength,
-      THEMES[state.colorTheme].comparison,
-      3,
-      2
-    );
+    const curve = new THREE.CatmullRomCurve3(curvePoints);
+    const tubeGeometry = new THREE.TubeGeometry(curve, 20, 0.4, 8, false);
+    const tubeMaterial = new THREE.MeshPhysicalMaterial({
+      color: THEMES[state.colorTheme].comparison,
+      emissive: THEMES[state.colorTheme].comparison,
+      emissiveIntensity: 0.3,
+      metalness: 0.8,
+      roughness: 0.2,
+      transparent: true,
+      opacity: 0.9
+    });
     
-    sceneRef.current.add(arrowHelper);
-    arrowsRef.current.push(arrowHelper);
+    const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+    tube.userData = { type: 'comparison' };
+    
+    sceneRef.current.add(tube);
+    arrowsRef.current.push(tube);
+    
+    // Add arrowhead at the end
+    const arrowHeadGeometry = new THREE.ConeGeometry(1, 2, 8);
+    const arrowHeadMaterial = new THREE.MeshPhysicalMaterial({
+      color: THEMES[state.colorTheme].comparison,
+      emissive: THEMES[state.colorTheme].comparison,
+      emissiveIntensity: 0.3,
+      metalness: 0.8,
+      roughness: 0.2
+    });
+    
+    const arrowHead = new THREE.Mesh(arrowHeadGeometry, arrowHeadMaterial);
+    
+    // Position at the end of the curve
+    const endPoint = curve.getPointAt(1);
+    const tangent = curve.getTangentAt(1).normalize();
+    
+    arrowHead.position.copy(endPoint);
+    
+    // Orient the arrowhead along the curve
+    const axis = new THREE.Vector3(0, 1, 0);
+    arrowHead.quaternion.setFromUnitVectors(axis, tangent);
+    arrowHead.rotateX(Math.PI / 2); // Adjust as needed
+    
+    sceneRef.current.add(arrowHead);
+    arrowsRef.current.push(arrowHead);
     
     // Add comparison text
-    addOperationLabel("COMPARING", element1.position.x, element2.position.x, THEMES[state.colorTheme].comparison);
+    const textCanvas = document.createElement('canvas');
+    const ctx = textCanvas.getContext('2d');
+    textCanvas.width = 512;
+    textCanvas.height = 128;
+    
+    // Create a background with a gradient
+    const gradient = ctx.createLinearGradient(0, 0, 512, 0);
+    const hexColor = THEMES[state.colorTheme].comparison;
+    const r = (hexColor >> 16) & 255;
+    const g = (hexColor >> 8) & 255;
+    const b = hexColor & 255;
+    
+    gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.7)`);
+    gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.85)`);
+    gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.7)`);
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(0, 0, 512, 128, 20);
+    ctx.fill();
+    
+    // Add border glow effect
+    ctx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.8)`;
+    ctx.shadowBlur = 15;
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.7)`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Add text
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 64px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('COMPARING', 256, 64);
+    
+    const textTexture = new THREE.CanvasTexture(textCanvas);
+    const textMaterial = new THREE.SpriteMaterial({ map: textTexture });
+    const textSprite = new THREE.Sprite(textMaterial);
+    const textScale = state.focusMode ? 8 : 4;
+    textSprite.scale.set(textScale, textScale / 4, 1);
+    textSprite.position.set(midX, peakY + 6, 0);
+    sceneRef.current.add(textSprite);
+    textLabelsRef.current.push(textSprite);
+    
+    // Add specific comparison text
+    const compTextCanvas = document.createElement('canvas');
+    const compCtx = compTextCanvas.getContext('2d');
+    compTextCanvas.width = 512;
+    compTextCanvas.height = 128;
+    
+    // Create background
+    compCtx.fillStyle = 'rgba(30, 30, 50, 0.95)';
+    compCtx.beginPath();
+    compCtx.roundRect(0, 0, 512, 128, 16);
+    compCtx.fill();
+    
+    // Add border
+    compCtx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.8)`;
+    compCtx.lineWidth = 4;
+    compCtx.roundRect(0, 0, 512, 128, 16);
+    compCtx.stroke();
+    
+    // Add text
+    compCtx.fillStyle = 'white';
+    compCtx.font = 'bold 48px Arial, sans-serif';
+    compCtx.textAlign = 'center';
+    compCtx.textBaseline = 'middle';
+    
+    // Get the comparison values
+    const value1 = data[index1];
+    const value2 = data[index2];
+    const compareSymbol = value1 > value2 ? '>' : (value1 < value2 ? '<' : '=');
+    
+    compCtx.fillText(`${value1} ${compareSymbol} ${value2}`, 256, 64);
+    
+    const compTextTexture = new THREE.CanvasTexture(compTextCanvas);
+    const compTextMaterial = new THREE.SpriteMaterial({ map: compTextTexture });
+    const compTextSprite = new THREE.Sprite(compTextMaterial);
+    compTextSprite.scale.set(textScale, textScale / 4, 1);
+    compTextSprite.position.set(midX, peakY + 12, 0);
+    sceneRef.current.add(compTextSprite);
+    textLabelsRef.current.push(compTextSprite);
   };
   
-  // Add swap indicator
+  // Add swap indicator with enhanced styling
   const addSwapIndicator = (index1, index2, data) => {
     if (!sceneRef.current || !dataObjectsRef.current[index1] || !dataObjectsRef.current[index2]) return;
     
     const element1 = dataObjectsRef.current[index1];
     const element2 = dataObjectsRef.current[index2];
     
-    // Create arrows for swap
+    // Create curved swap arrows for better visual appeal
     const midX = (element1.position.x + element2.position.x) / 2;
+    const element1Y = element1.position.y;
+    const element2Y = element2.position.y;
     
-    // Arrow from first to second (top path)
-    const arrowTop = new THREE.ArrowHelper(
-      new THREE.Vector3(1, 0, 0).normalize(),
-      new THREE.Vector3(element1.position.x, element1.position.y + 8, element1.position.z),
-      Math.abs(element2.position.x - element1.position.x) * 0.8,
-      THEMES[state.colorTheme].swap,
-      3,
-      2
-    );
+    // First curve: element1 to element2 (upper curve)
+    const curve1Points = [];
+    const segments = 20;
+    const upperPeakY = Math.max(element1Y, element2Y) + 10;
     
-    // Arrow from second to first (bottom path)
-    const arrowBottom = new THREE.ArrowHelper(
-      new THREE.Vector3(-1, 0, 0).normalize(),
-      new THREE.Vector3(element2.position.x, element2.position.y + 4, element2.position.z),
-      Math.abs(element2.position.x - element1.position.x) * 0.8,
-      THEMES[state.colorTheme].swap,
-      3,
-      2
-    );
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const x = THREE.MathUtils.lerp(element1.position.x, element2.position.x, t);
+      
+      // Quadratic curve formula for upper path
+      const y = THREE.MathUtils.lerp(element1Y, element2Y, t) + 
+                Math.sin(t * Math.PI) * 8; // Arch height
+      
+      curve1Points.push(new THREE.Vector3(x, y, 0));
+    }
     
-    sceneRef.current.add(arrowTop);
-    sceneRef.current.add(arrowBottom);
-    arrowsRef.current.push(arrowTop, arrowBottom);
+    const curve1 = new THREE.CatmullRomCurve3(curve1Points);
+    const tube1Geometry = new THREE.TubeGeometry(curve1, 20, 0.4, 8, false);
+    const tube1Material = new THREE.MeshPhysicalMaterial({
+      color: THEMES[state.colorTheme].swap,
+      emissive: THEMES[state.colorTheme].swap,
+      emissiveIntensity: 0.3,
+      metalness: 0.8,
+      roughness: 0.2,
+      transparent: true,
+      opacity: 0.9
+    });
+    
+    const tube1 = new THREE.Mesh(tube1Geometry, tube1Material);
+    tube1.userData = { type: 'swap' };
+    
+    sceneRef.current.add(tube1);
+    arrowsRef.current.push(tube1);
+    
+    // Second curve: element2 to element1 (lower curve)
+    const curve2Points = [];
+    const lowerPeakY = Math.min(element1Y, element2Y) - 6;
+    
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const x = THREE.MathUtils.lerp(element2.position.x, element1.position.x, t);
+      
+      // Quadratic curve formula for lower path
+      const y = THREE.MathUtils.lerp(element2Y, element1Y, t) - 
+                Math.sin(t * Math.PI) * 6; // Downward arch height
+      
+      curve2Points.push(new THREE.Vector3(x, y, 0));
+    }
+    
+    const curve2 = new THREE.CatmullRomCurve3(curve2Points);
+    const tube2Geometry = new THREE.TubeGeometry(curve2, 20, 0.4, 8, false);
+    const tube2Material = new THREE.MeshPhysicalMaterial({
+      color: THEMES[state.colorTheme].swap,
+      emissive: THEMES[state.colorTheme].swap,
+      emissiveIntensity: 0.3,
+      metalness: 0.8,
+      roughness: 0.2,
+      transparent: true,
+      opacity: 0.9
+    });
+    
+    const tube2 = new THREE.Mesh(tube2Geometry, tube2Material);
+    tube2.userData = { type: 'swap' };
+    
+    sceneRef.current.add(tube2);
+    arrowsRef.current.push(tube2);
+    
+    // Add arrowheads at the ends of both curves
+    const addArrowHead = (curve, isEndPoint) => {
+      const arrowHeadGeometry = new THREE.ConeGeometry(1, 2, 8);
+      const arrowHeadMaterial = new THREE.MeshPhysicalMaterial({
+        color: THEMES[state.colorTheme].swap,
+        emissive: THEMES[state.colorTheme].swap,
+        emissiveIntensity: 0.3,
+        metalness: 0.8,
+        roughness: 0.2
+      });
+      
+      const arrowHead = new THREE.Mesh(arrowHeadGeometry, arrowHeadMaterial);
+      
+      // Position at the end of the curve
+      const point = curve.getPointAt(isEndPoint ? 1 : 0);
+      const tangent = curve.getTangentAt(isEndPoint ? 1 : 0).normalize();
+      
+      arrowHead.position.copy(point);
+      
+      // Orient the arrowhead along the curve
+      const axis = new THREE.Vector3(0, 1, 0);
+      arrowHead.quaternion.setFromUnitVectors(axis, tangent);
+      
+      // Adjust rotation based on direction
+      if (isEndPoint) {
+        arrowHead.rotateX(Math.PI / 2);
+      } else {
+        arrowHead.rotateX(-Math.PI / 2);
+      }
+      
+      sceneRef.current.add(arrowHead);
+      arrowsRef.current.push(arrowHead);
+    };
+    
+    // Add arrowheads to both curves
+    addArrowHead(curve1, true);
+    addArrowHead(curve2, true);
     
     // Add swap text
-    addOperationLabel("SWAPPING", element1.position.x, element2.position.x, THEMES[state.colorTheme].swap);
-  };
-  
-  // Add operation label
-  const addOperationLabel = (text, x1, x2, color) => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 512;
-    canvas.height = 128;
+    const textCanvas = document.createElement('canvas');
+    const ctx = textCanvas.getContext('2d');
+    textCanvas.width = 512;
+    textCanvas.height = 128;
     
-    // Background with rounded corners
-    ctx.fillStyle = `rgba(${(color >> 16) & 255}, ${(color >> 8) & 255}, ${color & 255}, 0.8)`;
+    // Create a background with a gradient
+    const gradient = ctx.createLinearGradient(0, 0, 512, 0);
+    const hexColor = THEMES[state.colorTheme].swap;
+    const r = (hexColor >> 16) & 255;
+    const g = (hexColor >> 8) & 255;
+    const b = hexColor & 255;
+    
+    gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.7)`);
+    gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.85)`);
+    gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.7)`);
+    
+    ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.roundRect(0, 0, 512, 128, 20);
     ctx.fill();
     
-    // Text
+    // Add border glow effect
+    ctx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.8)`;
+    ctx.shadowBlur = 15;
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.7)`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Add text
     ctx.fillStyle = 'white';
     ctx.font = 'bold 64px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, 256, 64);
+    ctx.fillText('SWAPPING', 256, 64);
     
-    // Create sprite with texture
-    const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ map: texture });
-    const sprite = new THREE.Sprite(material);
+    const textTexture = new THREE.CanvasTexture(textCanvas);
+    const textMaterial = new THREE.SpriteMaterial({ map: textTexture });
+    const textSprite = new THREE.Sprite(textMaterial);
+    const textScale = state.focusMode ? 8 : 4;
+    textSprite.scale.set(textScale, textScale / 4, 1);
+    textSprite.position.set(midX, upperPeakY + 6, 0);
+    sceneRef.current.add(textSprite);
+    textLabelsRef.current.push(textSprite);
     
-    // Scale and position
-    const scale = state.focusMode ? 8 : 5;
-    sprite.scale.set(scale, scale / 4, 1);
+    // Add specific swap text showing values
+    const swapTextCanvas = document.createElement('canvas');
+    const swapCtx = swapTextCanvas.getContext('2d');
+    swapTextCanvas.width = 512;
+    swapTextCanvas.height = 128;
     
-    const midX = (x1 + x2) / 2;
-    sprite.position.set(midX, 20, 0);
+    // Create background
+    swapCtx.fillStyle = 'rgba(30, 30, 50, 0.95)';
+    swapCtx.beginPath();
+    swapCtx.roundRect(0, 0, 512, 128, 16);
+    swapCtx.fill();
     
-    // Add to scene
-    sceneRef.current.add(sprite);
-    textLabelsRef.current.push(sprite);
+    // Add border
+    swapCtx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.8)`;
+    swapCtx.lineWidth = 4;
+    swapCtx.roundRect(0, 0, 512, 128, 16);
+    swapCtx.stroke();
+    
+    // Add text
+    swapCtx.fillStyle = 'white';
+    swapCtx.font = 'bold 48px Arial, sans-serif';
+    swapCtx.textAlign = 'center';
+    swapCtx.textBaseline = 'middle';
+    swapCtx.fillText(`${data[index1]} ⟷ ${data[index2]}`, 256, 64);
+    
+    const swapTextTexture = new THREE.CanvasTexture(swapTextCanvas);
+    const swapTextMaterial = new THREE.SpriteMaterial({ map: swapTextTexture });
+    const swapTextSprite = new THREE.Sprite(swapTextMaterial);
+    swapTextSprite.scale.set(textScale, textScale / 4, 1);
+    swapTextSprite.position.set(midX, upperPeakY + 15, 0);
+    sceneRef.current.add(swapTextSprite);
+    textLabelsRef.current.push(swapTextSprite);
   };
   
-  // Toggle play/pause
+  // Helper function to get element color based on its role
+  const getElementColor = (index, step, totalElements) => {
+    // Get theme colors
+    const colors = THEMES[state.colorTheme];
+    
+    // Determine color based on operation type
+    if (step.comparing && step.comparing.includes(index)) {
+      return colors.comparison;
+    } else if (step.swapped && step.swapped.includes(index)) {
+      return colors.swap;
+    } else if (step.sorted_indices && step.sorted_indices.includes(index)) {
+      return colors.sorted;
+    } else if (step.selected && step.selected.includes(index)) {
+      return colors.selected;
+    } else if (step.min_idx === index) {
+      return colors.selected;
+    } else if (step.highlighted && step.highlighted.includes(index)) {
+      return colors.selected;
+    } else {
+      return colors.default;
+    }
+  };
+  
+  // Toggle play/pause with enhanced animation
   const handlePlayPause = () => {
     togglePlayPause();
   };
   
-  // Toggle 3D/2D view
+  // Toggle 2D/3D view with smooth transition
   const toggle3DView = () => {
     setState(prevState => ({ ...prevState, is3DView: !prevState.is3DView }));
     
     if (cameraRef.current) {
-      if (state.is3DView) {
-        // Switch to 2D view
-        cameraRef.current.position.set(0, 80, 0.0001);
-      } else {
-        // Switch to 3D view
-        cameraRef.current.position.set(0, 40, 60);
+      // Create a smoother animation between views
+      const startPosition = cameraRef.current.position.clone();
+      const endPosition = state.is3DView ? 
+        new THREE.Vector3(0, 80, 0.0001) : // 2D view position
+        new THREE.Vector3(0, 40, 60);      // 3D view position
+      
+      const duration = 1000; // milliseconds
+      const startTime = Date.now();
+      
+      function animateCamera() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Use easing function for smoother transition
+        const easeProgress = 1 - Math.pow(1 - progress, 3); // cubic ease out
+        
+        // Interpolate position
+        cameraRef.current.position.lerpVectors(startPosition, endPosition, easeProgress);
+        
+        // Look at center
+        cameraRef.current.lookAt(0, 0, 0);
+        
+        if (progress < 1) {
+          requestAnimationFrame(animateCamera);
+        } else {
+          // Final position
+          cameraRef.current.position.copy(endPosition);
+          cameraRef.current.lookAt(0, 0, 0);
+          
+          // Update visualization
+          updateVisualization();
+        }
       }
-      cameraRef.current.lookAt(0, 0, 0);
+      
+      animateCamera();
     }
-    
-    updateVisualization();
   };
   
-  // Reset camera
+  // Reset camera with animation
   const resetCamera = () => {
-    if (cameraRef.current) {
-      cameraRef.current.position.set(0, 40, 60);
+    if (!cameraRef.current) return;
+    
+    // Animate camera reset for better UX
+    const startPosition = cameraRef.current.position.clone();
+    const endPosition = new THREE.Vector3(0, 40, 60);
+    
+    const duration = 800; // milliseconds
+    const startTime = Date.now();
+    
+    function animateReset() {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Use easing function
+      const easeProgress = 1 - Math.pow(1 - progress, 3); // cubic ease out
+      
+      // Interpolate position
+      cameraRef.current.position.lerpVectors(startPosition, endPosition, easeProgress);
+      
+      // Look at center
       cameraRef.current.lookAt(0, 0, 0);
       
-      if (controlsRef.current && typeof controlsRef.current.reset === 'function') {
-        controlsRef.current.reset();
+      if (progress < 1) {
+        requestAnimationFrame(animateReset);
+      } else {
+        // Final reset
+        cameraRef.current.position.copy(endPosition);
+        cameraRef.current.lookAt(0, 0, 0);
+        
+        if (controlsRef.current && typeof controlsRef.current.reset === 'function') {
+          controlsRef.current.reset();
+        }
       }
     }
+    
+    animateReset();
   };
   
   // Toggle fullscreen
@@ -923,8 +1456,10 @@ const VisualizationPlayer = ({
     setTimeout(handleResize, 100);
   };
   
-  // Update playback speed
-  const updatePlaybackSpeed = (e) => {
+  // Update playback speed with visual feedback
+  const updateSpeed = (e) => {
+    if (!e.target) return;
+    
     const speed = parseInt(e.target.value);
     setState(prevState => {
       if (prevState.isPlaying) {
@@ -948,6 +1483,16 @@ const VisualizationPlayer = ({
       
       return { ...prevState, playbackSpeed: speed };
     });
+    
+    // Add visual feedback for speed change
+    const speedDisplay = document.getElementById('speed-display');
+    if (speedDisplay) {
+      speedDisplay.textContent = `${speed}x`;
+      speedDisplay.classList.add('speed-changed');
+      setTimeout(() => {
+        speedDisplay.classList.remove('speed-changed');
+      }, 500);
+    }
   };
   
   // Change shape
@@ -962,6 +1507,16 @@ const VisualizationPlayer = ({
     
     if (sceneRef.current) {
       sceneRef.current.background = new THREE.Color(THEMES[theme].background);
+      
+      // Update background plane color
+      if (backgroundPlaneRef.current) {
+        backgroundPlaneRef.current.material.color = new THREE.Color(THEMES[theme].surface);
+      }
+      
+      // Update particle system color
+      if (particleSystemRef.current) {
+        particleSystemRef.current.material.color = new THREE.Color(THEMES[theme].accent);
+      }
     }
     
     updateVisualization();
@@ -994,6 +1549,44 @@ const VisualizationPlayer = ({
     setState(prevState => ({ ...prevState, customInputText: e.target.value }));
   };
   
+  // Clean up resources
+  const cleanupScene = () => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    
+    window.removeEventListener('resize', handleResize);
+    
+    if (rendererRef.current && rendererRef.current.domElement) {
+      rendererRef.current.dispose();
+    }
+    
+    if (sceneRef.current) {
+      disposeScene(sceneRef.current);
+    }
+  };
+  
+  // Dispose scene objects
+  const disposeScene = (scene) => {
+    scene.traverse((object) => {
+      if (object.geometry) {
+        object.geometry.dispose();
+      }
+      
+      if (object.material) {
+        if (Array.isArray(object.material)) {
+          object.material.forEach(material => material.dispose());
+        } else {
+          object.material.dispose();
+        }
+      }
+    });
+  };
+  
   // Calculate progress percentage
   const calculateProgress = () => {
     if (state.steps.length === 0) return 0;
@@ -1009,7 +1602,7 @@ const VisualizationPlayer = ({
     return state.steps[state.currentStepIndex];
   };
   
-  // Render component
+  // Render component with enhanced styling
   return (
     <div className={`visualization-container ${state.isFullscreen ? 'fullscreen' : ''}`}>
       <div className="visualization-header">
@@ -1093,6 +1686,13 @@ const VisualizationPlayer = ({
                     title="Diamond"
                   >
                     ◆
+                  </button>
+                  <button 
+                    className={`shape-option ${state.visualizationShape === 'torus' ? 'active' : ''}`}
+                    onClick={() => changeShape('torus')}
+                    title="Torus"
+                  >
+                    ⊗
                   </button>
                 </div>
               </div>
@@ -1214,6 +1814,59 @@ const VisualizationPlayer = ({
             />
           </div>
           
+          <div className="enhanced-speed-control">
+            <div className="speed-label">Speed: </div>
+            <div className="speed-slider-container">
+              <button className="speed-btn speed-decrease" onClick={() => {
+                if (state.playbackSpeed > 1) {
+                  const newSpeed = state.playbackSpeed - 1;
+                  setState(prevState => ({...prevState, playbackSpeed: newSpeed}));
+                  if (state.isPlaying) {
+                    if (intervalRef.current) clearInterval(intervalRef.current);
+                    intervalRef.current = setInterval(() => {
+                      setState(state => {
+                        if (state.currentStepIndex < state.steps.length - 1) {
+                          return {...state, currentStepIndex: state.currentStepIndex + 1};
+                        } else {
+                          clearInterval(intervalRef.current);
+                          return {...state, isPlaying: false};
+                        }
+                      });
+                    }, 2000 / newSpeed);
+                  }
+                }
+              }}>-</button>
+              <input 
+                type="range" 
+                min="1" 
+                max="10" 
+                value={state.playbackSpeed} 
+                onChange={updateSpeed}
+                className="speed-slider" 
+              />
+              <button className="speed-btn speed-increase" onClick={() => {
+                if (state.playbackSpeed < 10) {
+                  const newSpeed = state.playbackSpeed + 1;
+                  setState(prevState => ({...prevState, playbackSpeed: newSpeed}));
+                  if (state.isPlaying) {
+                    if (intervalRef.current) clearInterval(intervalRef.current);
+                    intervalRef.current = setInterval(() => {
+                      setState(state => {
+                        if (state.currentStepIndex < state.steps.length - 1) {
+                          return {...state, currentStepIndex: state.currentStepIndex + 1};
+                        } else {
+                          clearInterval(intervalRef.current);
+                          return {...state, isPlaying: false};
+                        }
+                      });
+                    }, 2000 / newSpeed);
+                  }
+                }
+              }}>+</button>
+            </div>
+            <div className="speed-value" id="speed-display">{state.playbackSpeed}x</div>
+          </div>
+          
           <div className="controls-container">
             <div className="playback-controls">
               <button 
@@ -1246,16 +1899,6 @@ const VisualizationPlayer = ({
               >
                 <SkipForward className="w-5 h-5" />
               </button>
-              <div className="speed-control">
-                <label>Speed: {state.playbackSpeed}x</label>
-                <input 
-                  type="range" 
-                  min="1" 
-                  max="10" 
-                  value={state.playbackSpeed} 
-                  onChange={updatePlaybackSpeed} 
-                />
-              </div>
             </div>
             
             <div className="view-controls">
@@ -1321,540 +1964,6 @@ const VisualizationPlayer = ({
           </div>
         </div>
       </div>
-      
-      <style jsx>{`
-        .visualization-container {
-          display: flex;
-          flex-direction: column;
-          height: 700px;
-          background-color: ${THEMES[state.colorTheme].background};
-          color: ${THEMES[state.colorTheme].text};
-          border-radius: 8px;
-          overflow: hidden;
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          position: relative;
-        }
-        
-        .visualization-container.fullscreen {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 9999;
-          border-radius: 0;
-          height: 100vh;
-        }
-        
-        .visualization-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          background-color: rgba(0, 0, 0, 0.3);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .visualization-header h2 {
-          margin: 0;
-          font-size: 1.25rem;
-        }
-        
-        .visualization-controls-top {
-          display: flex;
-          gap: 0.5rem;
-        }
-        
-        .visualization-main {
-          display: flex;
-          flex: 1;
-          overflow: hidden;
-        }
-        
-        .visualization-sidebar-left {
-          width: 0;
-          overflow: hidden;
-          border-right: 1px solid rgba(255, 255, 255, 0.1);
-          background-color: rgba(0, 0, 0, 0.2);
-          transition: width 0.3s ease;
-        }
-        
-        .visualization-sidebar-left.open {
-          width: 250px;
-        }
-        
-        .visualization-sidebar-right {
-          width: 0;
-          overflow: hidden;
-          border-left: 1px solid rgba(255, 255, 255, 0.1);
-          background-color: rgba(0, 0, 0, 0.2);
-          transition: width 0.3s ease;
-        }
-        
-        .visualization-sidebar-right.open {
-          width: 300px;
-        }
-        
-        .visualization-canvas-container {
-          flex: 1;
-          position: relative;
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .visualization-canvas {
-          flex: 1;
-          width: 100%;
-          position: relative;
-        }
-        
-        .controls-container {
-          padding: 1rem;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          background-color: rgba(0, 0, 0, 0.3);
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .playback-controls, .view-controls {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        
-        .control-button {
-          background-color: rgba(66, 133, 244, 0.2);
-          border: 1px solid rgba(66, 133, 244, 0.5);
-          color: white;
-          border-radius: 4px;
-          width: 40px;
-          height: 40px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .control-button:hover {
-          background-color: rgba(66, 133, 244, 0.3);
-          transform: translateY(-2px);
-        }
-        
-        .control-button:active {
-          transform: translateY(0);
-        }
-        
-        .control-button.play-pause {
-          width: 48px;
-          height: 48px;
-          background-color: rgba(66, 133, 244, 0.4);
-        }
-        
-        .control-button.reset {
-          background-color: rgba(234, 67, 53, 0.2);
-          border-color: rgba(234, 67, 53, 0.5);
-        }
-        
-        .control-button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-          transform: none;
-        }
-        
-        .speed-control {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-          margin-left: 0.5rem;
-        }
-        
-        .speed-control label {
-          font-size: 0.8rem;
-          color: rgba(255, 255, 255, 0.7);
-        }
-        
-        .speed-control input {
-          width: 100px;
-        }
-        
-        .focus-description {
-          position: absolute;
-          top: 1rem;
-          left: 50%;
-          transform: translateX(-50%);
-          background-color: rgba(0, 0, 0, 0.7);
-          border-radius: 8px;
-          padding: 1rem;
-          max-width: 80%;
-          border: 1px solid rgba(66, 133, 244, 0.5);
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-          z-index: 10;
-        }
-        
-        .focus-description h3 {
-          margin: 0 0 0.5rem;
-          font-size: 1rem;
-          color: #64b5f6;
-        }
-        
-        .focus-description p {
-          margin: 0;
-          font-size: 0.9rem;
-          color: rgba(255, 255, 255, 0.9);
-        }
-        
-        .progress-bar {
-          height: 4px;
-          background-color: rgba(255, 255, 255, 0.1);
-          width: 100%;
-        }
-        
-        .progress-fill {
-          height: 100%;
-          background-color: #64b5f6;
-          transition: width 0.3s ease;
-        }
-        
-        .settings-panel {
-          padding: 1rem;
-          height: 100%;
-          overflow-y: auto;
-        }
-        
-        .settings-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          padding-bottom: 0.5rem;
-        }
-        
-        .settings-header h3 {
-          margin: 0;
-          font-size: 1.1rem;
-        }
-        
-        .close-button {
-          background: none;
-          border: none;
-          color: rgba(255, 255, 255, 0.7);
-          cursor: pointer;
-          padding: 0.25rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 4px;
-        }
-        
-        .close-button:hover {
-          background-color: rgba(255, 255, 255, 0.1);
-          color: white;
-        }
-        
-        .settings-section {
-          margin-bottom: 1.5rem;
-        }
-        
-        .settings-section h4 {
-          margin: 0 0 0.5rem;
-          font-size: 0.9rem;
-          color: rgba(255, 255, 255, 0.7);
-        }
-        
-        .shape-selector, .theme-selector {
-          display: flex;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-        }
-        
-        .shape-option {
-          width: 40px;
-          height: 40px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background-color: rgba(0, 0, 0, 0.3);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 1.5rem;
-          transition: all 0.2s;
-        }
-        
-        .shape-option:hover {
-          background-color: rgba(66, 133, 244, 0.2);
-          transform: translateY(-2px);
-        }
-        
-        .shape-option.active {
-          background-color: rgba(66, 133, 244, 0.3);
-          border-color: #64b5f6;
-        }
-        
-        .theme-option {
-          width: 30px;
-          height: 30px;
-          border-radius: 50%;
-          cursor: pointer;
-          transition: all 0.2s;
-          border: 2px solid transparent;
-        }
-        
-        .theme-option:hover {
-          transform: scale(1.1);
-        }
-        
-        .theme-option.active {
-          border-color: white;
-          box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.5);
-        }
-        
-        .theme-blue {
-          background: linear-gradient(135deg, #4285F4, #64b5f6);
-        }
-        
-        .theme-green {
-          background: linear-gradient(135deg, #34A853, #81c784);
-        }
-        
-        .theme-purple {
-          background: linear-gradient(135deg, #AA46BC, #ba68c8);
-        }
-        
-        .theme-dark {
-          background: linear-gradient(135deg, #202124, #424242);
-        }
-        
-        .data-buttons {
-          display: flex;
-          gap: 0.5rem;
-          margin-bottom: 0.5rem;
-        }
-        
-        .data-buttons button {
-          background-color: rgba(66, 133, 244, 0.2);
-          border: 1px solid rgba(66, 133, 244, 0.5);
-          color: white;
-          border-radius: 4px;
-          padding: 0.4rem 0.75rem;
-          font-size: 0.8rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .data-buttons button:hover {
-          background-color: rgba(66, 133, 244, 0.3);
-        }
-        
-        .input-size {
-          margin-bottom: 0.5rem;
-        }
-        
-        .input-size label {
-          display: block;
-          margin-bottom: 0.25rem;
-          font-size: 0.9rem;
-        }
-        
-        .custom-input {
-          margin-top: 0.5rem;
-        }
-        
-        .custom-input label {
-          display: block;
-          margin-bottom: 0.25rem;
-          font-size: 0.9rem;
-        }
-        
-        .custom-input-row {
-          display: flex;
-          gap: 0.5rem;
-        }
-        
-        .custom-input input {
-          flex: 1;
-          padding: 0.5rem;
-          background-color: rgba(0, 0, 0, 0.3);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          border-radius: 4px;
-          color: white;
-        }
-        
-        .custom-input input:focus {
-          outline: none;
-          border-color: rgba(66, 133, 244, 0.5);
-        }
-        
-        .custom-input button {
-          background-color: rgba(66, 133, 244, 0.3);
-          border: 1px solid rgba(66, 133, 244, 0.5);
-          color: white;
-          border-radius: 4px;
-          padding: 0.5rem 0.75rem;
-          font-size: 0.8rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .custom-input button:hover {
-          background-color: rgba(66, 133, 244, 0.4);
-        }
-        
-        .error-message {
-          margin-top: 0.5rem;
-          color: #ff5252;
-          font-size: 0.8rem;
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
-          background-color: rgba(255, 82, 82, 0.1);
-          padding: 0.5rem;
-          border-radius: 4px;
-          border: 1px solid rgba(255, 82, 82, 0.3);
-        }
-        
-        .toggle-option {
-          margin-bottom: 0.5rem;
-        }
-        
-        .toggle-option label {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          cursor: pointer;
-        }
-        
-        .code-panel {
-          padding: 1rem;
-          height: 100%;
-          overflow-y: auto;
-        }
-        
-        .code-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          padding-bottom: 0.5rem;
-        }
-        
-        .code-header h3 {
-          margin: 0;
-          font-size: 1.1rem;
-        }
-        
-        .code-block {
-          background-color: rgba(0, 0, 0, 0.3);
-          border-radius: 4px;
-          padding: 1rem;
-          overflow-x: auto;
-          font-family: 'Fira Code', 'Courier New', monospace;
-          font-size: 0.85rem;
-          line-height: 1.5;
-          max-height: 300px;
-          overflow-y: auto;
-          white-space: pre;
-        }
-        
-        .step-info-panel {
-          padding: 1rem;
-        }
-        
-        .step-counter {
-          font-size: 0.9rem;
-          color: rgba(255, 255, 255, 0.7);
-          margin-bottom: 0.5rem;
-        }
-        
-        .step-description {
-          margin-bottom: 1rem;
-          padding-bottom: 1rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .step-description h3 {
-          margin: 0 0 0.5rem;
-          font-size: 1rem;
-          color: #64b5f6;
-        }
-        
-        .step-description p {
-          margin: 0;
-          font-size: 0.9rem;
-          line-height: 1.5;
-        }
-        
-        .algorithm-info {
-          font-size: 0.9rem;
-        }
-        
-        .info-row {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 0.5rem;
-        }
-        
-        .info-label {
-          color: rgba(255, 255, 255, 0.7);
-        }
-        
-        .loading-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          background-color: rgba(0, 0, 0, 0.7);
-          z-index: 20;
-        }
-        
-        .loading-spinner {
-          width: 40px;
-          height: 40px;
-          border: 4px solid rgba(255, 255, 255, 0.3);
-          border-radius: 50%;
-          border-top-color: #ffffff;
-          animation: spin 1s ease-in-out infinite;
-          margin-bottom: 1rem;
-        }
-        
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        
-        /* Media queries for responsive design */
-        @media (max-width: 900px) {
-          .visualization-main {
-            flex-direction: column;
-          }
-          
-          .visualization-sidebar-left.open,
-          .visualization-sidebar-right.open {
-            width: 100%;
-            max-height: 300px;
-            border: none;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-          }
-          
-          .visualization-canvas-container {
-            min-height: 400px;
-          }
-          
-          .controls-container {
-            flex-direction: column;
-            gap: 1rem;
-          }
-        }
-      `}</style>
     </div>
   );
 };
