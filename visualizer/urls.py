@@ -14,6 +14,7 @@ urlpatterns = [
     path('', views.index, name='index'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('visualization/<int:algorithm_id>/', views.visualization, name='visualization'),
+    path('saved-visualization/<int:visualization_id>/', views.saved_visualization, name='saved-visualization'),
     
     # API endpoints
     path('api/', include(router.urls)),

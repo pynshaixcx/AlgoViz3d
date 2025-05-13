@@ -67,6 +67,23 @@ def visualization(request, algorithm_id):
     
     return render(request, 'visualization.html', context)
 
+def saved_visualization(request, visualization_id):
+    """View a saved visualization"""
+    visualization = get_object_or_404(Visualization, id=visualization_id)
+    
+    # Check if the user has permission to view this visualization
+    if visualization.user and visualization.user != request.user and not request.user.is_staff:
+        return render(request, '403.html', status=403)
+    
+    algorithm = visualization.algorithm
+    
+    context = {
+        'visualization': visualization,
+        'algorithm': algorithm,
+    }
+    
+    return render(request, 'saved_visualization.html', context)
+
 @csrf_exempt
 @api_view(['POST'])
 def execute_algorithm(request):
@@ -124,11 +141,18 @@ def execute_algorithm(request):
             except Exception as e:
                 logger.error(f"Error saving visualization: {str(e)}")
         
+        # Format the response for the React component
         return Response({
-            'algorithm': algorithm.name,
+            'algorithm': {
+                'id': algorithm.id,
+                'name': algorithm.name,
+                'description': algorithm.description,
+                'timeComplexity': algorithm.time_complexity,
+                'spaceComplexity': algorithm.space_complexity,
+                'code_implementation': algorithm.code_implementation
+            },
             'steps': steps,
-            'time_complexity': algorithm.time_complexity,
-            'space_complexity': algorithm.space_complexity,
+            'inputData': input_data
         })
     
     except Exception as e:

@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ visualization.name }} - AlgoViz3D{% endblock %}
+
+{% load webpack_loader %}
+
+{% block extra_css %}
+<style>
+  /* Basic styles to ensure the visualization container dimensions are correct */
+  .visualization-root {
+    width: 100%;
+    height: 700px;
+    position: relative;
+    margin-bottom: 2rem;
+  }
+  
+  /* Loading state before React renders */
+  .initial-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #0a1929;
+    color: white;
+    font-family: 'Inter', -apple-system, sans-serif;
+  }
+  
+  .initial-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #ffffff;
+    animation: spin 1s ease-in-out infinite;
+    margin-bottom: 1rem;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  .visualization-header {
+    margin-bottom: 1.5rem;
+  }
+  
+  .visualization-info {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .visualization-info p {
+    margin: 0.25rem 0;
+  }
+  
+  .visualization-meta {
+    display: flex;
+    justify-content: space-between;
+    color: #666;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="visualization-page">
+  <div class="visualization-header">
+    <h1>{{ visualization.name }}</h1>
+    <div class="breadcrumb">
+      <a href="/dashboard/">Dashboard</a> &gt; 
+      <a href="/visualization/{{ algorithm.id }}/">{{ algorithm.name }}</a> &gt;
+      <span>Saved Visualization</span>
+    </div>
+  </div>
+  
+  <div class="visualization-info">
+    <p><strong>Algorithm:</strong> {{ algorithm.name }}</p>
+    <p><strong>Input Size:</strong> {{ visualization.input_data|length }} elements</p>
+    <div class="visualization-meta">
+      <span>Created: {{ visualization.created_at|date:"F j, Y, g:i a" }}</span>
+      {% if visualization.user %}
+      <span>By: {{ visualization.user.username }}</span>
+      {% endif %}
+    </div>
+  </div>
+  
+  <!-- React Visualization Root -->
+  <div id="visualization-root" class="visualization-root">
+    <div class="initial-loading">
+      <div class="initial-loading-spinner"></div>
+      <p>Loading saved visualization...</p>
+    </div>
+  </div>
+  
+  <!-- Include React bundle -->
+  {% render_bundle 'main' %}
+  
+  <script>
+    // Initialize the React component when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+      // Convert Django models to JSON for React
+      const visualizationData = {
+        algorithm: {
+          id: {{ algorithm.id }},
+          name: "{{ algorithm.name|escapejs }}",
+          description: "{{ algorithm.description|escapejs }}",
+          timeComplexity: "{{ algorithm.time_complexity }}",
+          spaceComplexity: "{{ algorithm.space_complexity }}",
+          code_implementation: `{{ algorithm.code_implementation|escapejs }}`
+        },
+        steps: {{ visualization.steps|safe }},
+        input_data: {{ visualization.input_data|safe }}
+      };
+      
+      // Initialize the React component with saved data
+      window.loadSavedVisualization('visualization-root', visualizationData);
+    });
+  </script>
+</div>
+{% endblock %}

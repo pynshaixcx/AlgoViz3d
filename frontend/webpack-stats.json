@@ -1,0 +1,16 @@
+{
+  "status": "done",
+  "assets": {
+    "main-6ca4116a89f58baa02e0.js": {
+      "name": "main-6ca4116a89f58baa02e0.js",
+      "path": "/Users/pynshainongsiej/Documents/Project/AlgoViz3d/static/frontend/main-6ca4116a89f58baa02e0.js",
+      "publicPath": "/static/frontend/main-6ca4116a89f58baa02e0.js"
+    }
+  },
+  "chunks": {
+    "main": [
+      "main-6ca4116a89f58baa02e0.js"
+    ]
+  },
+  "publicPath": "/static/frontend/"
+}
