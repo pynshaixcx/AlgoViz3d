@@ -1421,3 +1421,325 @@ input[type="range"]::-moz-range-thumb:hover {
     transform: scale(1.1);
   }
 
+/* AlgorithmViz3D Enhanced Styles - Add this to your styles.css file */
+
+/* Visualization container */
+.visualization-container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.visualization-root {
+  width: 100%;
+  height: 600px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 20px 0;
+  background-color: #0a1929;
+  position: relative;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Canvas styling */
+.visualization-canvas-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.visualization-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* Element popup */
+.element-popup {
+  position: absolute;
+  z-index: 1000;
+  background-color: rgba(20, 30, 50, 0.9);
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  max-width: 300px;
+  pointer-events: none;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.popup-content h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 16px;
+  color: #64b5f6;
+}
+
+.popup-content p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+/* Step information panel */
+.step-info {
+  margin-top: 15px;
+  background-color: rgba(20, 30, 50, 0.7);
+  padding: 15px;
+  border-radius: 8px;
+  color: white;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.step-counter {
+  font-weight: bold;
+  margin-bottom: 5px;
+  font-size: 1.1rem;
+  color: #64b5f6;
+}
+
+.step-description {
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+.educational-note {
+  margin-top: 10px;
+  color: #aaa;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+/* Control buttons */
+.visualization-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background-color: rgba(20, 30, 50, 0.8);
+  padding: 12px 25px;
+  border-radius: 30px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.control-button {
+  background-color: rgba(60, 70, 100, 0.8);
+  color: white;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s ease;
+}
+
+.control-button:hover {
+  background-color: rgba(80, 100, 150, 0.9);
+  transform: translateY(-2px);
+}
+
+.control-button:active {
+  transform: translateY(1px);
+}
+
+.control-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.control-button.reset {
+  background-color: rgba(239, 68, 68, 0.8);
+}
+
+.control-button.reset:hover {
+  background-color: rgba(239, 68, 68, 0.9);
+}
+
+.control-button.play {
+  background-color: rgba(59, 130, 246, 0.9);
+  width: 56px;
+  height: 56px;
+  font-size: 1.5rem;
+}
+
+.control-button.play:hover {
+  background-color: rgba(59, 130, 246, 1);
+}
+
+/* Shape controls */
+.shape-controls {
+  display: flex;
+  gap: 15px;
+  margin-top: 15px;
+  background-color: rgba(20, 30, 50, 0.7);
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.shape-label {
+  color: white;
+  display: flex;
+  align-items: center;
+}
+
+.shape-options {
+  display: flex;
+  gap: 10px;
+}
+
+.shape-button {
+  width: 40px;
+  height: 40px;
+  background-color: rgba(60, 70, 100, 0.7);
+  border: 1px solid rgba(100, 149, 237, 0.3);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: white;
+  font-size: 1.2rem;
+  transition: all 0.2s ease;
+}
+
+.shape-button:hover {
+  background-color: rgba(80, 100, 150, 0.8);
+  transform: translateY(-2px);
+}
+
+.shape-button.active {
+  background-color: rgba(59, 130, 246, 0.8);
+  border-color: white;
+}
+
+/* Options controls */
+.options-label {
+  color: white;
+  margin-left: 15px;
+  display: flex;
+  align-items: center;
+}
+
+.options-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.option-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: white;
+}
+
+.option-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* Instructions panel */
+.instructions-panel {
+  margin-top: 15px;
+  background-color: rgba(20, 30, 50, 0.7);
+  padding: 15px;
+  border-radius: 8px;
+  color: white;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.instructions-panel h3 {
+  margin-top: 0;
+  color: #64b5f6;
+  font-size: 1.2rem;
+}
+
+.instructions-panel ul {
+  padding-left: 20px;
+  margin: 10px 0;
+}
+
+.instructions-panel li {
+  margin-bottom: 5px;
+  line-height: 1.4;
+}
+
+/* Loading indicator */
+.loading-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(10, 25, 41, 0.8);
+  z-index: 20;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(100, 149, 237, 0.3);
+  border-top-color: rgba(100, 149, 237, 1);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  color: white;
+  font-size: 16px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .visualization-controls {
+    padding: 8px 15px;
+    gap: 8px;
+  }
+  
+  .control-button {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+  
+  .control-button.play {
+    width: 48px;
+    height: 48px;
+  }
+  
+  .shape-controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .options-label {
+    margin-left: 0;
+  }
+  
+  .shape-options, .options-controls {
+    flex-wrap: wrap;
+  }
+}
