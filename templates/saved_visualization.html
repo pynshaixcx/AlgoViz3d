@@ -4,71 +4,6 @@
 
 {% load webpack_loader %}
 
-{% block extra_css %}
-<style>
-  /* Basic styles to ensure the visualization container dimensions are correct */
-  .visualization-root {
-    width: 100%;
-    height: 700px;
-    position: relative;
-    margin-bottom: 2rem;
-  }
-  
-  /* Loading state before React renders */
-  .initial-loading {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background-color: #0a1929;
-    color: white;
-    font-family: 'Inter', -apple-system, sans-serif;
-  }
-  
-  .initial-loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top-color: #ffffff;
-    animation: spin 1s ease-in-out infinite;
-    margin-bottom: 1rem;
-  }
-  
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-  
-  .visualization-header {
-    margin-bottom: 1.5rem;
-  }
-  
-  .visualization-info {
-    background-color: rgba(0, 0, 0, 0.05);
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-  }
-  
-  .visualization-info p {
-    margin: 0.25rem 0;
-  }
-  
-  .visualization-meta {
-    display: flex;
-    justify-content: space-between;
-    color: #666;
-    font-size: 0.9rem;
-    margin-top: 0.5rem;
-  }
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="visualization-page">
   <div class="visualization-header">
@@ -91,7 +26,7 @@
     </div>
   </div>
   
-  <!-- React Visualization Root -->
+  <!-- 3D Visualization Root -->
   <div id="visualization-root" class="visualization-root">
     <div class="initial-loading">
       <div class="initial-loading-spinner"></div>
@@ -119,7 +54,7 @@
         input_data: {{ visualization.input_data|safe }}
       };
       
-      // Initialize the React component with saved data
+      // Initialize the visualization component with saved data
       window.loadSavedVisualization('visualization-root', visualizationData);
     });
   </script>

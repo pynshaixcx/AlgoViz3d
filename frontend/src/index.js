@@ -1,8 +1,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import VisualizationPlayer from './components/VisualizationPlayer';
+import AlgorithmVisualizer3D from './components/AlgorithmVisualizer3D';
 
-// Initialize visualization player with default or saved data
+// Initialize the 3D visualizer
 window.initVisualizationPlayer = (containerId, algorithmData, initialSteps = []) => {
   const container = document.getElementById(containerId);
   if (!container) {
@@ -12,14 +12,14 @@ window.initVisualizationPlayer = (containerId, algorithmData, initialSteps = [])
   
   const root = createRoot(container);
   root.render(
-    <VisualizationPlayer 
+    <AlgorithmVisualizer3D 
       algorithm={algorithmData}
       initialSteps={initialSteps}
     />
   );
 };
 
-// Allow loading saved visualizations
+// Load saved visualization
 window.loadSavedVisualization = (containerId, visualizationData) => {
   const container = document.getElementById(containerId);
   if (!container) {
@@ -29,7 +29,7 @@ window.loadSavedVisualization = (containerId, visualizationData) => {
   
   const root = createRoot(container);
   root.render(
-    <VisualizationPlayer 
+    <AlgorithmVisualizer3D 
       algorithm={visualizationData.algorithm}
       initialSteps={visualizationData.steps}
       initialInputData={visualizationData.input_data}
