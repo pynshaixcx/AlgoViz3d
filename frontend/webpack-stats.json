@@ -1,10 +1,15 @@
 {
-  "status": "done",
+  "status": "error",
   "assets": {
     "main-2c1e1a733be95fc32b57.js": {
       "name": "main-2c1e1a733be95fc32b57.js",
       "path": "/Users/pynshainongsiej/Documents/Project/AlgoViz3d/static/frontend/main-2c1e1a733be95fc32b57.js",
       "publicPath": "/static/frontend/main-2c1e1a733be95fc32b57.js"
+    },
+    "main-db54c7ed0cd9d69f4a98.js": {
+      "name": "main-db54c7ed0cd9d69f4a98.js",
+      "path": "/Users/pynshainongsiej/Documents/Project/AlgoViz3d/static/frontend/main-db54c7ed0cd9d69f4a98.js",
+      "publicPath": "/static/frontend/main-db54c7ed0cd9d69f4a98.js"
     }
   },
   "chunks": {
@@ -12,5 +17,7 @@
       "main-2c1e1a733be95fc32b57.js"
     ]
   },
-  "publicPath": "/static/frontend/"
+  "publicPath": "/static/frontend/",
+  "error": "ModuleNotFoundError",
+  "message": "Module not found: Error: Can't resolve './components/VisualizationPlayer' in '/Users/pynshainongsiej/Documents/Project/AlgoViz3d/frontend/src'"
 }

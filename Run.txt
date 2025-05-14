@@ -1,0 +1,105 @@
+Step 1: Set Up the Django Project
+	1	Make sure your existing Django app is working:
+
+bash
+python manage.py runserver
+Visit http://localhost:8000 in your browser to verify your Django app is running correctly.
+	2	Install additional required Python packages:
+
+bash
+pip install django-webpack-loader==1.8.1
+Step 2: Add the Frontend React Setup
+	1	Create the frontend directory structure:
+
+bash
+mkdir -p frontend/src/components
+	2	Set up the frontend files:
+Copy the files we created into their respective locations:
+	•	package.json → frontend/package.json
+	•	webpack.config.js → frontend/webpack.config.js
+	•	index.js → frontend/src/index.js
+	•	VisualizationPlayer.jsx → frontend/src/components/VisualizationPlayer.jsx
+	3	Install frontend dependencies:
+
+bash
+cd frontend
+npm install
+Step 3: Update Django Files
+	1	Update settings.py:
+Replace or modify your algo_viz3d/settings.py file with the new settings that include webpack loader configuration.
+	2	Update the templates and views:
+	•	Replace templates/visualization.html with the new template
+	•	Create a new template templates/saved_visualization.html
+	•	Update visualizer/views.py with the new view functions
+	•	Update visualizer/urls.py with the new URL patterns
+Step 4: Build the Frontend Assets
+
+bash
+cd frontend
+npm run build
+cd ..
+This will compile the React components and place them in the static/frontend directory.
+Step 5: Run the Application
+	1	Apply any database migrations if needed:
+
+bash
+python manage.py migrate
+	2	Run the Django development server:
+
+bash
+python manage.py runserver
+	3	In a separate terminal, run the webpack development server for hot reloading (optional, for development):
+
+bash
+cd frontend
+npm run dev
+	4	Visit your application:
+Open your browser and go to http://localhost:8000
+Navigate to the visualization page, for example: http://localhost:8000/visualization/5/ (where 5 is an algorithm ID)
+Alternative: Use the Setup Script
+If you prefer an automated setup, you can use the setup script:
+	1	Create the setup script:
+Save the setup.sh file to your project root directory.
+	2	Make it executable:
+
+bash
+chmod +x setup.sh
+	3	Run the script:
+
+bash
+./setup.sh
+	4	Follow the prompts to complete the setup process.
+Troubleshooting
+	1	Missing frontend files:
+If you get an error about missing frontend files, ensure the static/frontend directory exists and has been populated by the webpack build:
+
+bash
+mkdir -p static/frontend
+cd frontend && npm run build
+	2	Webpack loader errors:
+If Django complains about webpack loader files:
+
+bash
+python manage.py collectstatic --noinput
+	3	Check for JS console errors:
+Open your browser's developer tools (F12) to see if there are any JavaScript errors.
+	4	React component not rendering:
+Ensure the container element ID in your template matches the ID used in the React initialization:
+
+javascript
+window.initVisualizationPlayer('visualization-root', algorithmData);
+	5	Three.js not loading:
+Make sure Three.js is properly imported in your component and that all the geometries are created correctly.
+Development Tips
+	1	For frontend development, use the webpack development server:
+
+bash
+cd frontend
+npm run dev
+This watches for changes and automatically rebuilds your frontend code.
+	2	To modify the visualization player component:
+Edit frontend/src/components/VisualizationPlayer.jsx
+	3	To add more algorithms or features:
+Update your Django models and views, then ensure the API returns data in the format expected by the React component.
+	4	For theme or UI changes:
+The component includes inline styles that you can modify directly in the VisualizationPlayer.jsx file.
